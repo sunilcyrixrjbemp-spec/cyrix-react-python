@@ -10,7 +10,7 @@ auth_bp = Blueprint('auth', __name__)
 import os
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_i7WRWahS_GbcGT7C65PH4fkAvez4DyYiS")
-FROM_EMAIL = "Cyrix Healthcare <noreply@sunilbishnoi.co.in>"
+FROM_EMAIL = "Sunil Bishnoi <rjbemp-bikaner@cyrix.in>"
 
 def send_email(to_email: str, subject: str, html_content: str):
     """Sends email via Resend API."""
