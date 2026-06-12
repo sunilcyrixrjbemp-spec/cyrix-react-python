@@ -151,7 +151,7 @@ body {
 
 /* ─── OTP Area ───────────────────────────────── */
 .otp-area {
-  display: none;
+  display: block;
   margin-top: 18px;
   padding: 22px;
   background: #f0f7ff;
@@ -160,10 +160,53 @@ body {
   animation: slideUp 0.35s cubic-bezier(0.34,1.1,0.64,1) forwards;
 }
 
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+.otp-actions-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0 4px;
+}
+
+.timer-text {
+  font-size: 12.5px;
+  color: var(--color-text-2);
+  font-weight: 500;
+}
+
+.timer-countdown {
+  font-weight: 700;
+  color: var(--color-accent);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.resend-btn {
+  background: none;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--color-accent);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all var(--transition);
+}
+
+.resend-btn:hover:not(:disabled) {
+  background: rgba(0,113,227,0.08);
+}
+
+.resend-btn:disabled {
+  color: var(--color-text-3);
+  cursor: not-allowed;
+}
+
 
 /* ─── Status Message ─────────────────────────── */
 #statusMsg {
