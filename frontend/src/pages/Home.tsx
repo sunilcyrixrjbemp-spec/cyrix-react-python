@@ -521,9 +521,9 @@ export default function Home({ setActiveTab }: HomeProps) {
       {/* MAIN CONTENT */}
       <div style={{
         flex: 1,
-        marginLeft: 'auto',
-        width: '100%'
-      }} className="d-lg-block" style={{ marginLeft: window.innerWidth > 991 ? '280px' : '0' }}>
+        width: '100%',
+        marginLeft: window.innerWidth > 991 ? '280px' : '0'
+      }} className="d-lg-block">
 
         {/* MOBILE HEADER */}
         <div className="d-lg-none d-flex align-items-center justify-content-between p-3" style={{
