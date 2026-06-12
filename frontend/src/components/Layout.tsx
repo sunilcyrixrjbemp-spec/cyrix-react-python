@@ -31,7 +31,23 @@ export default function Layout() {
   const [userId, setUserId] = useState('');
   const [allowedMenus, setAllowedMenus] = useState<string[]>([]);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname, isMobile]);
 
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -96,7 +112,11 @@ export default function Layout() {
     <div className={`wrapper ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapse'}`} style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       
       {/* NAVBAR */}
-      <nav className="main-header navbar navbar-expand navbar-white navbar-light border-bottom" style={{ marginLeft: sidebarOpen ? '250px' : '0px', transition: 'margin-left .3s ease-in-out', zIndex: 1030 }}>
+      <nav className="main-header navbar navbar-expand navbar-white navbar-light border-bottom" style={{ 
+        marginLeft: (isMobile || !sidebarOpen) ? '0px' : '250px', 
+        transition: 'margin-left .3s ease-in-out', 
+        zIndex: 1030 
+      }}>
         {/* Left navbar links */}
         <ul className="navbar-nav">
           <li className="nav-item">
@@ -181,9 +201,9 @@ export default function Layout() {
 
       {/* CONTENT WRAPPER */}
       <div className="content-wrapper" style={{
-        marginLeft: sidebarOpen ? '250px' : '0px',
+        marginLeft: (isMobile || !sidebarOpen) ? '0px' : '250px',
         transition: 'margin-left .3s ease-in-out',
-        padding: '20px',
+        padding: isMobile ? '10px' : '20px',
         flex: 1,
         backgroundColor: '#f4f6f9',
         paddingBottom: '80px' // spacing for mobile bottom-nav
@@ -238,8 +258,8 @@ export default function Layout() {
       </div>
 
       {/* Mobile Sidebar Overlay */}
-      {!sidebarOpen && (
-        <div className="sidebar-overlay d-md-none" onClick={() => setSidebarOpen(true)} style={{
+      {isMobile && sidebarOpen && (
+        <div className="sidebar-overlay active d-md-none" onClick={() => setSidebarOpen(false)} style={{
           position: 'fixed',
           top: 0,
           left: 0,
