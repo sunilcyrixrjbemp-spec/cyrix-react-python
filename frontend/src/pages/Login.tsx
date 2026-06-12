@@ -11,6 +11,10 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [popupMsg, setPopupMsg] = useState('');
   const [showPopup, setShowPopup] = useState(false);
+  const [isError, setIsError] = useState(false);
+
+  const [showServerConfig, setShowServerConfig] = useState(false);
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem('CYRIX_API_URL') || '');
 
   useEffect(() => {
     if (localStorage.getItem('logged_in_user_id')) {
@@ -18,10 +22,19 @@ export default function Login() {
     }
   }, [navigate]);
 
+  const handleSaveServerUrl = () => {
+    localStorage.setItem('CYRIX_API_URL', serverUrl.trim());
+    setPopupMsg(serverUrl.trim() ? `Server API URL configured to: ${serverUrl.trim()}` : "API URL reset to default cloud route.");
+    setIsError(false);
+    setShowPopup(true);
+    setShowServerConfig(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setPopupMsg("User ID and Password are required.");
+      setIsError(true);
       setShowPopup(true);
       return;
     }
@@ -45,6 +58,9 @@ export default function Login() {
         localStorage.setItem('display_name', data.full_name);
         localStorage.setItem('user_role', data.role);
         localStorage.setItem('allowed_menus', data.allowed_menus || 'dashboard,expense,profile');
+        if (serverUrl.trim()) {
+          localStorage.setItem('CYRIX_API_URL', serverUrl.trim());
+        }
         
         // Explicitly set cookie so that API calls from browser naturally send the session ID to the backend
         document.cookie = `user_id=${encodeURIComponent(data.user_id)}; path=/; max-age=86400;`;
@@ -52,10 +68,12 @@ export default function Login() {
         navigate('/home');
       } else {
         setPopupMsg(data.message || "Invalid credentials.");
+        setIsError(true);
         setShowPopup(true);
       }
     } catch (err) {
       setPopupMsg("Server Connection Failed. Please try again.");
+      setIsError(true);
       setShowPopup(true);
     } finally {
       setIsLoading(false);
@@ -123,6 +141,39 @@ export default function Login() {
             <span className="divider">|</span>
             <Link to="/retrieve">Retrieve ID</Link>
           </div>
+
+          <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setShowServerConfig(!showServerConfig)}
+              style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: '12.5px', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              {showServerConfig ? "Hide Connection Settings" : "Configure API Server URL"}
+            </button>
+          </div>
+
+          {showServerConfig && (
+            <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', textAlign: 'left' }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-1)', display: 'block', marginBottom: '6px' }}>Backend API Server URL</label>
+              <input
+                type="text"
+                placeholder="e.g. http://localhost:8000"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.15)', fontSize: '13px', background: 'rgba(0, 0, 0, 0.2)', color: 'var(--text-1)', marginBottom: '8px', boxSizing: 'border-box' }}
+              />
+              <p style={{ fontSize: '11px', color: 'var(--text-2)', margin: '0 0 10px 0', lineHeight: '1.4' }}>
+                Leave blank to use default cloud route. Set to <code>http://localhost:8000</code> to connect to your local Python API server.
+              </p>
+              <button
+                type="button"
+                onClick={handleSaveServerUrl}
+                style={{ width: '100%', padding: '8px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Save Connection URL
+              </button>
+            </div>
+          )}
         </form>
 
         <footer>
@@ -134,7 +185,7 @@ export default function Login() {
         message={popupMsg}
         show={showPopup}
         onClose={() => setShowPopup(false)}
-        isError={true}
+        isError={isError}
       />
     </div>
   );
