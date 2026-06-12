@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import '../css/style.css';
+import '../css/dashboard.css';
+
 
 interface UserFilter {
   user_id: string;

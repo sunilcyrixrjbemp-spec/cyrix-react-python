@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 import '../css/style.css';
+import '../css/upload.css';
+
 
 interface UploadResult {
   success: boolean;
