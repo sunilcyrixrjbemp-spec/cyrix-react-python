@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import '../css/admin.css';
 
 interface User {
   user_id: string;
@@ -32,7 +31,6 @@ const PERMISSION_OPTIONS = [
   { id: 'upload', label: 'Data Sync', defaultAllowed: false },
   { id: 'month', label: 'Month Summary', defaultAllowed: false }
 ];
-
 
 interface Dropdowns {
   zones: string[];
@@ -88,7 +86,6 @@ export default function Admin() {
   }, []);
 
   const showToast = (msg: string, type: Toast['type'] = 'info') => {
-    const id = Date.now();
     setToasts(prev => [...prev, { msg, type }]);
     setTimeout(() => {
       setToasts(prev => prev.slice(1));
@@ -98,7 +95,7 @@ export default function Admin() {
   const fetchInitialData = async () => {
     setIsLoading(true);
     try {
-      const dropRes = await fetch('/api/dropdowns');
+      const dropRes = await fetch('/api/admin/dropdowns');
       const dropData = await dropRes.json();
       if (dropData.success) {
         setDropdowns({
@@ -119,7 +116,7 @@ export default function Admin() {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/admin/users');
       const data = await res.json();
       if (data.success) {
         setUsers(data.users || []);
@@ -136,7 +133,7 @@ export default function Admin() {
       return;
     }
     try {
-      const res = await fetch(`/api/districts?zone=${encodeURIComponent(zone)}`);
+      const res = await fetch(`/api/admin/districts?zone=${encodeURIComponent(zone)}`);
       const data = await res.json();
       if (data.success) {
         setDistricts(data.districts || []);
@@ -149,7 +146,7 @@ export default function Admin() {
   const loadDistrictsForEdit = async (zone: string, targetDistrict: string) => {
     if (!zone) return;
     try {
-      const res = await fetch(`/api/districts?zone=${encodeURIComponent(zone)}`);
+      const res = await fetch(`/api/admin/districts?zone=${encodeURIComponent(zone)}`);
       const data = await res.json();
       if (data.success) {
         setDistricts(data.districts || []);
@@ -162,7 +159,7 @@ export default function Admin() {
 
   const updateAccountStatus = async (userId: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/users/${encodeURIComponent(userId)}/status`, {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -182,7 +179,7 @@ export default function Admin() {
   const deleteUser = async (userId: string) => {
     if (window.confirm('Delete this user? This cannot be undone.')) {
       try {
-        const res = await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
           method: 'DELETE'
         });
         const data = await res.json();
@@ -237,7 +234,7 @@ export default function Admin() {
       grade: u.grade || '',
       role: u.role || '',
       zone_name: u.zone_name || '',
-      district_name: '', // loaded asynchronously below
+      district_name: '', 
       level_first_approver: u.level_first_approver || '',
       level_second_approver: u.level_second_approver || '',
       password: '',
@@ -263,7 +260,6 @@ export default function Admin() {
       newMenus = currentMenus.filter(m => m !== menuId);
     }
     
-    // Always keep defaults
     if (!newMenus.includes('dashboard')) newMenus.push('dashboard');
     if (!newMenus.includes('expense')) newMenus.push('expense');
     if (!newMenus.includes('profile')) newMenus.push('profile');
@@ -283,7 +279,7 @@ export default function Admin() {
     e.preventDefault();
     setIsSaving(true);
 
-    const url = editUserId ? `/api/users/${encodeURIComponent(editUserId)}` : '/api/users';
+    const url = editUserId ? `/api/admin/users/${encodeURIComponent(editUserId)}` : '/api/admin/users';
     const method = editUserId ? 'PUT' : 'POST';
 
     try {
@@ -307,7 +303,6 @@ export default function Admin() {
     }
   };
 
-  // Filter users based on query
   const filteredUsers = users.filter(u => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
@@ -321,513 +316,556 @@ export default function Admin() {
     );
   });
 
-  // Approver selection lists
   const potentialApprovers = users.filter(u =>
     ['Manager', 'Admin', 'Superadmin', 'Coordinator', 'Divisional Manager', 'District Incharge'].includes(u.role)
   );
 
   return (
-    <>
+    <div style={{ width: '100%' }}>
       {isLoading && (
-        <div id="loadingOverlay" style={{ display: 'flex', opacity: 1 }}>
-          <div className="loader-wrapper">
-            <div className="loader"></div>
+        <div className="d-flex justify-content-center align-items-center" style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 9999 }}>
+          <div className="text-center">
+            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
+            <p className="mt-2 font-weight-bold">Loading System Directory...</p>
           </div>
-          <div id="loaderText">Loading configuration...</div>
         </div>
       )}
 
-      {/* Desktop Header */}
-      <div className="page-header desktop-only">
-        <div>
-          <p className="page-breadcrumb">Cyrix Healthcare / System</p>
-          <h1 className="page-title">⚙️ User Management</h1>
+      {/* HEADER NAVBAR */}
+      <div className="row align-items-center mb-4">
+        <div className="col-sm-6">
+          <h1 className="m-0 font-weight-bold text-dark h3">
+            <i className="fas fa-user-cog mr-2 text-primary"></i> User Directory
+          </h1>
+          <p className="text-muted mb-0" style={{ fontSize: '13px' }}>Manage user accounts, roles, zones, and page view permissions.</p>
         </div>
-        <div className="page-header-right">
-          <div className="search-wrap">
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search ID, Name, District..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className="col-sm-6 text-sm-right mt-3 mt-sm-0">
+          <div className="d-inline-flex align-items-center w-100 justify-content-sm-end" style={{ gap: '10px' }}>
+            <div className="input-group" style={{ maxWidth: '300px' }}>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Search users..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="input-group-append">
+                <span className="input-group-text"><i className="fas fa-search"></i></span>
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={openAddModal}>
+              <i className="fas fa-plus-circle mr-1"></i> Add User
+            </button>
           </div>
-          <button className="btn btn-primary" onClick={openAddModal}>
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Add New User
-          </button>
         </div>
       </div>
 
-      <div className="content-area">
-        {/* Mobile Header Bar */}
-        <div style={{ display: 'flex', gap: '12px' }} className="hide-desktop">
-          <div className="search-wrap" style={{ flex: 1 }}>
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+      {/* DESKTOP VIEWPORT DESIGN */}
+      <div className="d-none d-md-block">
+        <div className="card card-primary card-outline shadow-sm">
+          <div className="card-header border-bottom d-flex align-items-center justify-content-between p-3">
+            <h3 className="card-title font-weight-bold text-dark m-0">All System Users</h3>
+            <span className="badge badge-primary">{filteredUsers.length} total</span>
           </div>
-          <button className="btn btn-primary" onClick={openAddModal} style={{ padding: '10px', flexShrink: 0 }}>
-            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="table-card">
-          <div className="table-header">
-            <h2 className="table-title">All System Users</h2>
-            <span style={{ fontSize: '12px', color: 'var(--text-2)', background: 'var(--surface-2)', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: '999px', fontWeight: 600 }}>
-              {filteredUsers.length} users
-            </span>
-          </div>
-
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>User ID</th>
-                  <th>Full Name</th>
-                  <th>E-Code</th>
-                  <th>Designation</th>
-                  <th>Mobile</th>
-                  <th>Email</th>
-                  <th>Upkaran ID</th>
-                  <th>DOB</th>
-                  <th>Joining</th>
-                  <th>Zone</th>
-                  <th>District</th>
-                  <th>Grade</th>
-                  <th>Role</th>
-                  <th>L1 Approver</th>
-                  <th>L2 Approver</th>
-                  <th>Failed Attempts</th>
-                  <th>Status</th>
-                  <th className="sticky-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.length === 0 ? (
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table table-striped table-hover table-bordered mb-0 align-middle">
+                <thead className="bg-light text-secondary">
                   <tr>
-                    <td colSpan={18} className="empty-state">
-                      <div className="empty-icon">👥</div>
-                      <div className="empty-text">No users found.</div>
-                    </td>
+                    <th>User ID</th>
+                    <th>Full Name</th>
+                    <th>E-Code</th>
+                    <th>Designation</th>
+                    <th>Mobile</th>
+                    <th>Email</th>
+                    <th>Zone</th>
+                    <th>District</th>
+                    <th>Role</th>
+                    <th>L1 Approver</th>
+                    <th>L2 Approver</th>
+                    <th>Status</th>
+                    <th className="text-center">Actions</th>
                   </tr>
-                ) : (
-                  filteredUsers.map((u) => (
-                    <tr key={u.user_id} onClick={() => viewUserDetails(u)}>
-                      <td data-label="User ID">
-                        <div className="cell-val">
-                          <span className="user-id-tag">{u.user_id}</span>
-                        </div>
-                      </td>
-                      <td data-label="Full Name">
-                        <div className="cell-val">
-                          <strong>{u.full_name}</strong>
-                        </div>
-                      </td>
-                      <td data-label="E-Code"><div className="cell-val">{u.e_code}</div></td>
-                      <td data-label="Designation"><div className="cell-val">{u.designation}</div></td>
-                      <td data-label="Mobile"><div className="cell-val">{u.mobile_number}</div></td>
-                      <td data-label="Email"><div className="cell-val">{u.mail_id}</div></td>
-                      <td data-label="Upkaran ID"><div className="cell-val">{u.e_upkaran_id || '—'}</div></td>
-                      <td data-label="DOB"><div className="cell-val">{u.date_of_birth}</div></td>
-                      <td data-label="Joining"><div className="cell-val">{u.date_joining}</div></td>
-                      <td data-label="Zone"><div className="cell-val">{u.zone_name}</div></td>
-                      <td data-label="District"><div className="cell-val">{u.district_name}</div></td>
-                      <td data-label="Grade"><div className="cell-val">{u.grade}</div></td>
-                      <td data-label="Role">
-                        <div className="cell-val">
-                          <span style={{ background: 'var(--primary-50)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 600 }}>
-                            {u.role}
-                          </span>
-                        </div>
-                      </td>
-                      <td data-label="L1 Approver"><div className="cell-val">{u.level_first_approver || '—'}</div></td>
-                      <td data-label="L2 Approver"><div className="cell-val">{u.level_second_approver || '—'}</div></td>
-                      <td data-label="Failed Attempts">
-                        <div className="cell-val">
-                          <span className="failed-count">{u.failed_attempts || 0}</span>
-                        </div>
-                      </td>
-                      <td data-label="Status" onClick={(e) => e.stopPropagation()}>
-                        <div className="cell-val">
-                          <select
-                            className="status-select"
-                            value={u.account_status}
-                            onChange={(e) => updateAccountStatus(u.user_id, e.target.value)}
-                          >
-                            <option value="Active">✅ Active</option>
-                            <option value="Locked">🔒 Locked</option>
-                            <option value="In-Active">⛔ In-Active</option>
-                          </select>
-                        </div>
-                      </td>
-                      <td data-label="Actions" onClick={(e) => e.stopPropagation()}>
-                        <div className="cell-val" style={{ width: '100%' }}>
-                          <div className="action-btns">
-                            <button className="btn-edit" onClick={() => openEditModal(u)}>
-                              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg> Edit
-                            </button>
-                            <button className="btn-delete" onClick={() => deleteUser(u.user_id)}>
-                              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                              </svg> Delete
-                            </button>
-                          </div>
-                        </div>
+                </thead>
+                <tbody>
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} className="text-center p-5 text-muted">
+                        <i className="fas fa-users fa-3x mb-3 text-gray"></i>
+                        <p className="font-weight-bold mb-0">No users found.</p>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredUsers.map((u) => (
+                      <tr key={u.user_id} style={{ cursor: 'pointer' }} onClick={() => viewUserDetails(u)}>
+                        <td><span className="badge badge-light border text-monospace">{u.user_id}</span></td>
+                        <td className="font-weight-bold text-primary">{u.full_name}</td>
+                        <td><span className="badge badge-secondary">{u.e_code}</span></td>
+                        <td>{u.designation}</td>
+                        <td>{u.mobile_number}</td>
+                        <td style={{ fontSize: '13px' }}>{u.mail_id}</td>
+                        <td>{u.zone_name}</td>
+                        <td>{u.district_name}</td>
+                        <td><span className="badge badge-info">{u.role}</span></td>
+                        <td style={{ fontSize: '13px' }}>{u.level_first_approver || '—'}</td>
+                        <td style={{ fontSize: '13px' }}>{u.level_second_approver || '—'}</td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <select
+                            className="form-select form-select-sm font-weight-bold text-uppercase"
+                            value={u.account_status}
+                            onChange={(e) => updateAccountStatus(u.user_id, e.target.value)}
+                            style={{
+                              padding: '2px 8px',
+                              fontSize: '12px',
+                              borderRadius: '4px',
+                              color: u.account_status === 'Active' ? '#28a745' : u.account_status === 'Locked' ? '#dc3545' : '#6c757d',
+                              borderColor: '#ced4da'
+                            }}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Locked">Locked</option>
+                            <option value="In-Active">In-Active</option>
+                          </select>
+                        </td>
+                        <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="d-flex justify-content-center" style={{ gap: '6px' }}>
+                            <button className="btn btn-outline-primary btn-xs" onClick={() => openEditModal(u)} title="Edit Account">
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button className="btn btn-outline-danger btn-xs" onClick={() => deleteUser(u.user_id)} title="Delete Account">
+                              <i className="fas fa-trash-alt"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Add / Edit Modal Overlay */}
-      <div className={`modal-overlay ${showAddEditModal ? 'active' : ''}`} onClick={() => setShowAddEditModal(false)}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <h2 className="modal-title">{editUserId ? `Edit User: ${editUserId}` : 'Add New User'}</h2>
-          <form onSubmit={handleFormSubmit}>
-            <div className="form-grid">
-              <div className="form-group">
-                <label>User ID</label>
-                <input
-                  type="text"
-                  readOnly
-                  className="readonly-id"
-                  value={editUserId ? editUserId : dropdowns.next_id}
-                />
+      {/* MOBILE VIEWPORT DESIGN */}
+      <div className="d-md-none">
+        {filteredUsers.length === 0 ? (
+          <div className="card card-body text-center p-5 text-muted shadow-sm">
+            <i className="fas fa-users fa-3x mb-3 text-gray"></i>
+            <p className="font-weight-bold mb-0">No users found.</p>
+          </div>
+        ) : (
+          filteredUsers.map((u) => (
+            <div className="card card-primary card-outline shadow-sm mb-3" key={u.user_id} onClick={() => viewUserDetails(u)}>
+              <div className="card-header p-3 d-flex align-items-center justify-content-between">
+                <div>
+                  <h6 className="font-weight-bold text-primary mb-0">{u.full_name}</h6>
+                  <small className="text-muted">{u.designation} · <span className="font-weight-bold">{u.e_code}</span></small>
+                </div>
+                <span className="badge badge-light border text-monospace">{u.user_id}</span>
               </div>
-              <div className="form-group">
-                <label>Full Name <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter full name"
-                  value={formValues.full_name}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, full_name: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>E-Code <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="text"
-                  required
-                  placeholder="EMP-001"
-                  value={formValues.e_code}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, e_code: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Designation <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Field Engineer"
-                  value={formValues.designation}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, designation: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Mobile Number <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="text"
-                  required
-                  placeholder="9876543210"
-                  value={formValues.mobile_number}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, mobile_number: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Email Address <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="email"
-                  required
-                  placeholder="user@cyrix.com"
-                  value={formValues.mail_id}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, mail_id: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>E-Upkaran ID</label>
-                <input
-                  type="text"
-                  placeholder="Optional"
-                  value={formValues.e_upkaran_id}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, e_upkaran_id: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Date of Birth <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="date"
-                  required
-                  value={formValues.date_of_birth}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, date_of_birth: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Date of Joining <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="date"
-                  required
-                  value={formValues.date_joining}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, date_joining: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Grade <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select
-                  required
-                  value={formValues.grade}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, grade: e.target.value }))}
-                >
-                  <option value="">Select</option>
-                  {dropdowns.grades.map(g => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Role <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select
-                  required
-                  value={formValues.role}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, role: e.target.value }))}
-                >
-                  <option value="">Select</option>
-                  {dropdowns.roles.map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Zone <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select
-                  required
-                  value={formValues.zone_name}
-                  onChange={(e) => handleZoneChange(e.target.value)}
-                >
-                  <option value="">Select</option>
-                  {dropdowns.zones.map(z => (
-                    <option key={z} value={z}>{z}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>District <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select
-                  required
-                  value={formValues.district_name}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, district_name: e.target.value }))}
-                >
-                  <option value="">Select</option>
-                  {districts.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>L1 Approver</label>
-                <select
-                  value={formValues.level_first_approver}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, level_first_approver: e.target.value }))}
-                >
-                  <option value="">Select Approver / None</option>
-                  {potentialApprovers.map(a => (
-                    <option key={a.user_id} value={a.user_id}>
-                      {a.full_name} ({a.user_id}) - {a.role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>L2 Approver</label>
-                <select
-                  value={formValues.level_second_approver}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, level_second_approver: e.target.value }))}
-                >
-                  <option value="">Select Approver / None</option>
-                  {potentialApprovers.map(a => (
-                    <option key={a.user_id} value={a.user_id}>
-                      {a.full_name} ({a.user_id}) - {a.role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input
-                  type="password"
-                  placeholder={editUserId ? 'Leave blank to keep current' : 'Enter password'}
-                  required={!editUserId}
-                  value={formValues.password}
-                  onChange={(e) => setFormValues(prev => ({ ...prev, password: e.target.value }))}
-                />
-              </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-1)', marginBottom: '10px', display: 'block' }}>
-                  Page Access Permissions
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', background: 'var(--surface-2)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  {PERMISSION_OPTIONS.map(opt => {
-                    const isChecked = (formValues.allowed_menus || 'dashboard,expense,profile')
-                      .split(',')
-                      .map(m => m.trim().toLowerCase())
-                      .includes(opt.id);
-
-                    return (
-                      <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: opt.defaultAllowed ? 'not-allowed' : 'pointer', userSelect: 'none', fontSize: '14px', color: 'var(--text-1)' }}>
-                        <input
-                          type="checkbox"
-                          checked={opt.defaultAllowed || isChecked}
-                          disabled={opt.defaultAllowed}
-                          onChange={(e) => handlePermissionChange(opt.id, e.target.checked)}
-                          style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
-                        />
-                        <span>{opt.label}</span>
-                        {opt.defaultAllowed && (
-                          <span style={{ fontSize: '10px', color: 'var(--text-3)', fontStyle: 'italic' }}> (Default)</span>
-                        )}
-                      </label>
-                    );
-                  })}
+              <div className="card-body p-3 text-secondary" style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                <div className="row">
+                  <div className="col-6"><strong>Role:</strong> {u.role}</div>
+                  <div className="col-6"><strong>District:</strong> {u.district_name}</div>
+                  <div className="col-12 mt-1"><strong>Mobile:</strong> {u.mobile_number}</div>
+                  <div className="col-12"><strong>Email:</strong> {u.mail_id}</div>
+                </div>
+                <hr className="my-2" />
+                <div className="d-flex align-items-center justify-content-between mt-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="d-inline-flex align-items-center">
+                    <span className="mr-2 font-weight-bold" style={{ fontSize: '12px' }}>STATUS:</span>
+                    <select
+                      className="form-select form-select-sm font-weight-bold text-uppercase"
+                      value={u.account_status}
+                      onChange={(e) => updateAccountStatus(u.user_id, e.target.value)}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '11px',
+                        borderRadius: '4px',
+                        color: u.account_status === 'Active' ? '#28a745' : u.account_status === 'Locked' ? '#dc3545' : '#6c757d',
+                        borderColor: '#ced4da'
+                      }}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Locked">Locked</option>
+                      <option value="In-Active">In-Active</option>
+                    </select>
+                  </div>
+                  <div className="d-flex" style={{ gap: '8px' }}>
+                    <button className="btn btn-outline-primary btn-xs py-1 px-2" onClick={() => openEditModal(u)}>
+                      <i className="fas fa-edit mr-1"></i> Edit
+                    </button>
+                    <button className="btn btn-outline-danger btn-xs py-1 px-2" onClick={() => deleteUser(u.user_id)}>
+                      <i className="fas fa-trash-alt mr-1"></i> Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="modal-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowAddEditModal(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={isSaving}>
-                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-                {isSaving ? 'Saving...' : 'Save User'}
-              </button>
-            </div>
-          </form>
-        </div>
+          ))
+        )}
       </div>
 
-      {/* View User Modal Overlay */}
-      <div className={`modal-overlay ${showViewModal ? 'active' : ''}`} onClick={() => setShowViewModal(false)}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
-            <h2 className="modal-title" style={{ border: 'none', padding: 0, margin: 0 }}>User Details</h2>
-            <button
-              type="button"
-              onClick={() => setShowViewModal(false)}
-              style={{ background: 'var(--surface-2)', border: 'none', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', cursor: 'pointer' }}
-            >
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-          {selectedUser && (
-            <div className="detail-grid">
-              <div className="detail-item"><label>User ID</label><p>{selectedUser.user_id}</p></div>
-              <div className="detail-item"><label>Full Name</label><p>{selectedUser.full_name}</p></div>
-              <div className="detail-item"><label>E-Code</label><p>{selectedUser.e_code}</p></div>
-              <div className="detail-item"><label>Designation</label><p>{selectedUser.designation}</p></div>
-              <div className="detail-item"><label>Mobile</label><p>{selectedUser.mobile_number}</p></div>
-              <div className="detail-item"><label>Email</label><p>{selectedUser.mail_id}</p></div>
-              <div className="detail-item"><label>Upkaran ID</label><p>{selectedUser.e_upkaran_id || '—'}</p></div>
-              <div className="detail-item"><label>DOB</label><p>{selectedUser.date_of_birth}</p></div>
-              <div className="detail-item"><label>Joining Date</label><p>{selectedUser.date_joining}</p></div>
-              <div className="detail-item"><label>Grade</label><p>{selectedUser.grade}</p></div>
-              <div className="detail-item"><label>Role</label><p>{selectedUser.role}</p></div>
-              <div className="detail-item"><label>Zone</label><p>{selectedUser.zone_name}</p></div>
-              <div className="detail-item"><label>District</label><p>{selectedUser.district_name}</p></div>
-              <div className="detail-item"><label>L1 Approver</label><p>{selectedUser.level_first_approver || '—'}</p></div>
-              <div className="detail-item"><label>L2 Approver</label><p>{selectedUser.level_second_approver || '—'}</p></div>
-              <div className="detail-item"><label>Failed Attempts</label><p>{selectedUser.failed_attempts || 0}</p></div>
-              <div className="detail-item"><label>Status</label><p>{selectedUser.account_status}</p></div>
-              <div className="detail-item" style={{ gridColumn: 'span 2' }}>
-                <label>Allowed Menus</label>
-                <p style={{ marginTop: '4px', color: 'var(--text-1)', fontWeight: 600 }}>
-                  {(selectedUser.allowed_menus || 'dashboard,expense,profile')
-                    .split(',')
-                    .map(m => m.trim())
-                    .map(m => {
-                      const match = PERMISSION_OPTIONS.find(opt => opt.id === m.toLowerCase());
-                      return match ? match.label : m;
-                    })
-                    .join(', ')}
-                </p>
+      {/* BOOTSTRAP ADD / EDIT MODAL */}
+      {showAddEditModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1040 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1050 }} tabIndex={-1} role="dialog" onClick={() => setShowAddEditModal(false)}>
+            <div className="modal-dialog modal-lg modal-dialog-centered" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-primary text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white">
+                    <i className={editUserId ? "fas fa-user-edit mr-2 text-white" : "fas fa-user-plus mr-2 text-white"}></i>
+                    {editUserId ? `Edit User: ${editUserId}` : 'Add New User'}
+                  </h5>
+                  <button type="button" className="close text-white" onClick={() => setShowAddEditModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <form onSubmit={handleFormSubmit}>
+                  <div className="modal-body p-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                    <div className="row">
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>User ID</label>
+                        <input
+                          type="text"
+                          readOnly
+                          className="form-control bg-light text-primary font-weight-bold"
+                          value={editUserId ? editUserId : dropdowns.next_id}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Full Name <span className="text-danger">*</span></label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          required
+                          placeholder="Enter full name"
+                          value={formValues.full_name}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, full_name: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Employee Code <span className="text-danger">*</span></label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          required
+                          placeholder="e.g. EMP-001"
+                          value={formValues.e_code}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, e_code: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Designation <span className="text-danger">*</span></label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          required
+                          placeholder="e.g. Field Engineer"
+                          value={formValues.designation}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, designation: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Mobile Number <span className="text-danger">*</span></label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          required
+                          placeholder="10-digit mobile number"
+                          value={formValues.mobile_number}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, mobile_number: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Email Address <span className="text-danger">*</span></label>
+                        <input
+                          type="email"
+                          className="form-control"
+                          required
+                          placeholder="user@cyrix.com"
+                          value={formValues.mail_id}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, mail_id: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>E-Upkaran ID</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Optional"
+                          value={formValues.e_upkaran_id}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, e_upkaran_id: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Date of Birth <span className="text-danger">*</span></label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          required
+                          value={formValues.date_of_birth}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, date_of_birth: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Date of Joining <span className="text-danger">*</span></label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          required
+                          value={formValues.date_joining}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, date_joining: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Grade <span className="text-danger">*</span></label>
+                        <select
+                          className="form-control"
+                          required
+                          value={formValues.grade}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, grade: e.target.value }))}
+                        >
+                          <option value="">Select Grade</option>
+                          {dropdowns.grades.map(g => (
+                            <option key={g} value={g}>{g}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Role <span className="text-danger">*</span></label>
+                        <select
+                          className="form-control"
+                          required
+                          value={formValues.role}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, role: e.target.value }))}
+                        >
+                          <option value="">Select Role</option>
+                          {dropdowns.roles.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Zone <span className="text-danger">*</span></label>
+                        <select
+                          className="form-control"
+                          required
+                          value={formValues.zone_name}
+                          onChange={(e) => handleZoneChange(e.target.value)}
+                        >
+                          <option value="">Select Zone</option>
+                          {dropdowns.zones.map(z => (
+                            <option key={z} value={z}>{z}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>District <span className="text-danger">*</span></label>
+                        <select
+                          className="form-control"
+                          required
+                          value={formValues.district_name}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, district_name: e.target.value }))}
+                        >
+                          <option value="">Select District</option>
+                          {districts.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>L1 Approver</label>
+                        <select
+                          className="form-control"
+                          value={formValues.level_first_approver}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, level_first_approver: e.target.value }))}
+                        >
+                          <option value="">Select L1 Manager (None)</option>
+                          {potentialApprovers.map(a => (
+                            <option key={a.user_id} value={a.user_id}>
+                              {a.full_name} ({a.user_id}) - {a.role}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>L2 Approver</label>
+                        <select
+                          className="form-control"
+                          value={formValues.level_second_approver}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, level_second_approver: e.target.value }))}
+                        >
+                          <option value="">Select L2 Manager (None)</option>
+                          {potentialApprovers.map(a => (
+                            <option key={a.user_id} value={a.user_id}>
+                              {a.full_name} ({a.user_id}) - {a.role}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6 form-group mb-3">
+                        <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Password</label>
+                        <input
+                          type="password"
+                          className="form-control"
+                          placeholder={editUserId ? 'Leave blank to keep current' : 'Enter password'}
+                          required={!editUserId}
+                          value={formValues.password}
+                          onChange={(e) => setFormValues(prev => ({ ...prev, password: e.target.value }))}
+                        />
+                      </div>
+                      
+                      <div className="col-12 mt-3">
+                        <label className="font-weight-bold text-secondary text-uppercase mb-2" style={{ fontSize: '12px' }}>
+                          Page Access Permissions
+                        </label>
+                        <div className="p-3 border rounded bg-light" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                          {PERMISSION_OPTIONS.map(opt => {
+                            const isChecked = (formValues.allowed_menus || 'dashboard,expense,profile')
+                              .split(',')
+                              .map(m => m.trim().toLowerCase())
+                              .includes(opt.id);
+
+                            return (
+                              <div className="custom-control custom-checkbox" key={opt.id}>
+                                <input
+                                  type="checkbox"
+                                  className="custom-control-input"
+                                  id={`perm-${opt.id}`}
+                                  checked={opt.defaultAllowed || isChecked}
+                                  disabled={opt.defaultAllowed}
+                                  onChange={(e) => handlePermissionChange(opt.id, e.target.checked)}
+                                  style={{ cursor: opt.defaultAllowed ? 'not-allowed' : 'pointer' }}
+                                />
+                                <label className="custom-control-label pl-2" htmlFor={`perm-${opt.id}`} style={{ cursor: opt.defaultAllowed ? 'not-allowed' : 'pointer', fontSize: '13px' }}>
+                                  {opt.label}
+                                  {opt.defaultAllowed && <span className="text-muted font-italic" style={{ fontSize: '10px' }}> (Default)</span>}
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer bg-light border-top-0 justify-content-end p-3">
+                    <button type="button" className="btn btn-secondary px-4 btn-sm" onClick={() => setShowAddEditModal(false)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary px-4 btn-sm" disabled={isSaving}>
+                      {isSaving ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fas fa-save mr-1"></i> Save User
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
-          )}
-          <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setShowViewModal(false)}>
-              Close
-            </button>
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* Toast Container */}
-      <div className="toast-container">
+      {/* BOOTSTRAP VIEW USER MODAL */}
+      {showViewModal && selectedUser && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1040 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1050 }} tabIndex={-1} role="dialog" onClick={() => setShowViewModal(false)}>
+            <div className="modal-dialog modal-dialog-centered modal-lg" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-dark text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white">
+                    <i className="fas fa-id-card mr-2 text-white"></i> User Details
+                  </h5>
+                  <button type="button" className="close text-white" onClick={() => setShowViewModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body p-4">
+                  <div className="row text-secondary" style={{ fontSize: '14px', lineHeight: '2' }}>
+                    <div className="col-sm-6 mb-2"><strong>User ID:</strong> <span className="badge badge-light border text-monospace text-dark px-2">{selectedUser.user_id}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Full Name:</strong> <span className="font-weight-bold text-dark">{selectedUser.full_name}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Employee Code:</strong> <span className="badge badge-secondary">{selectedUser.e_code}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Designation:</strong> <span className="text-dark">{selectedUser.designation}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Mobile Number:</strong> <span className="text-dark">{selectedUser.mobile_number}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Email Address:</strong> <span className="text-dark">{selectedUser.mail_id}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>E-Upkaran ID:</strong> <span className="text-dark">{selectedUser.e_upkaran_id || '—'}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Date of Birth:</strong> <span className="text-dark">{selectedUser.date_of_birth}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Date of Joining:</strong> <span className="text-dark">{selectedUser.date_joining}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Grade:</strong> <span className="text-dark">{selectedUser.grade}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Role:</strong> <span className="badge badge-info">{selectedUser.role}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Zone:</strong> <span className="text-dark">{selectedUser.zone_name}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>District:</strong> <span className="text-dark">{selectedUser.district_name}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Level 1 Approver:</strong> <span className="text-dark">{selectedUser.level_first_approver || '—'}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Level 2 Approver:</strong> <span className="text-dark">{selectedUser.level_second_approver || '—'}</span></div>
+                    <div className="col-sm-6 mb-2"><strong>Failed Attempts:</strong> <span className="badge badge-warning text-dark">{selectedUser.failed_attempts || 0}</span></div>
+                    <div className="col-sm-6 mb-2">
+                      <strong>Account Status:</strong> 
+                      <span className={`badge ml-2 ${selectedUser.account_status === 'Active' ? 'badge-success' : 'badge-danger'}`}>
+                        {selectedUser.account_status}
+                      </span>
+                    </div>
+                    
+                    <div className="col-12 mt-3">
+                      <hr className="my-2" />
+                      <strong>Allowed Menu Access Roles:</strong>
+                      <p className="mt-1 font-weight-bold text-dark mb-0">
+                        {(selectedUser.allowed_menus || 'dashboard,expense,profile')
+                          .split(',')
+                          .map(m => m.trim())
+                          .map(m => {
+                            const match = PERMISSION_OPTIONS.find(opt => opt.id === m.toLowerCase());
+                            return match ? match.label : m;
+                          })
+                          .join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer bg-light border-top-0 justify-content-end p-3">
+                  <button type="button" className="btn btn-secondary px-4 btn-sm" onClick={() => setShowViewModal(false)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Toast Notification Area */}
+      <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, pointerEvents: 'none' }}>
         {toasts.map((toast, idx) => {
-          let bg = 'var(--text)';
-          let icon = 'ℹ️';
-          if (toast.type === 'success') { bg = 'var(--success)'; icon = '✅'; }
-          if (toast.type === 'danger') { bg = 'var(--danger)'; icon = '❌'; }
-          if (toast.type === 'warning') { bg = 'var(--warning)'; icon = '⚠️'; }
+          let bg = 'bg-info text-white';
+          let icon = 'fas fa-info-circle';
+          if (toast.type === 'success') { bg = 'bg-success text-white'; icon = 'fas fa-check-circle'; }
+          if (toast.type === 'danger') { bg = 'bg-danger text-white'; icon = 'fas fa-exclamation-circle'; }
+          if (toast.type === 'warning') { bg = 'bg-warning text-dark'; icon = 'fas fa-exclamation-triangle'; }
 
           return (
             <div
               key={idx}
+              className={`toast show border-0 shadow-lg ${bg} mb-2`}
               style={{
-                background: 'white',
-                color: bg,
-                padding: '14px 20px',
-                borderRadius: '10px',
-                marginTop: '10px',
-                fontSize: '14px',
-                fontWeight: 600,
-                boxShadow: 'var(--shadow-md)',
-                borderLeft: `4px solid ${bg}`,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                pointerEvents: 'auto'
+                minWidth: '250px',
+                borderRadius: '8px',
+                pointerEvents: 'auto',
+                opacity: 0.95
               }}
             >
-              <span>{icon}</span> <span>{toast.msg}</span>
+              <div className="toast-body p-3 d-flex align-items-center">
+                <i className={`${icon} mr-2`} style={{ fontSize: '18px' }}></i>
+                <span className="font-weight-bold">{toast.msg}</span>
+              </div>
             </div>
           );
         })}
       </div>
-    </>
+    </div>
   );
 }

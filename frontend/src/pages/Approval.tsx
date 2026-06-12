@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../css/style.css'; // Uses master CSS layouts
 import SuccessPopup from '../components/SuccessPopup';
 
 interface ApprovalItem {
   type: 'Expense' | 'Limit';
   id: string;
-  req_type?: string; // For Limit requests ('KM' | 'AUTO')
+  req_type?: string; 
   full_name: string;
   e_code: string;
   district: string;
@@ -397,14 +396,12 @@ export default function Approval() {
     setShowEditExpenseModal(true);
 
     try {
-      // Get current itineraries detail
       const detailRes = await fetch(`/api/approval/detail?id=${expId}&type=Expense&user_id=${currentUserId}`);
       const detailDataObj = await detailRes.json();
       if (!detailRes.ok || !detailDataObj.success) throw new Error(detailDataObj.message);
 
       const empId = detailDataObj.expense.user_id;
 
-      // Get employee's allowance rules
       const initRes = await fetch(`/api/expense/init?user_id=${empId}`);
       const initDataObj = await initRes.json();
       if (!initRes.ok || !initDataObj.success) throw new Error(initDataObj.message);
@@ -413,7 +410,6 @@ export default function Approval() {
       setEditFacilities(initDataObj.facilities);
       setEditUser(initDataObj.user);
 
-      // Pre-fill form values
       const exp = detailDataObj.expense;
       setEditFormValues({
         da_amount: exp.da_amount || 0,
@@ -447,7 +443,6 @@ export default function Approval() {
     }
   };
 
-  // Recalculates total edit modal values
   const recalculateEditTotal = (formVal: typeof editFormValues) => {
     let sum = 0;
     sum += parseFloat(formVal.da_amount as any) || 0;
@@ -466,7 +461,6 @@ export default function Approval() {
         if (lIdx === idx) {
           const nextLeg = { ...leg, [field]: val };
 
-          // Mode bike/car automatic travel calculations
           if (field === 'distance_km' || field === 'travel_mode') {
             const mode = field === 'travel_mode' ? val : leg.travel_mode;
             const km = field === 'distance_km' ? parseFloat(val) || 0 : leg.distance_km;
@@ -592,820 +586,738 @@ export default function Approval() {
     return [...defaults, ...mapped];
   };
 
+  const getStatusBadge = (status: string) => {
+    const st = (status || 'Pending').toLowerCase();
+    let cls = 'badge-warning text-white';
+    if (st === 'approved') cls = 'badge-success';
+    if (st === 'rejected') cls = 'badge-danger';
+    return <span className={`badge ${cls}`}>{status || 'Pending'}</span>;
+  };
+
+  const formatDate = (str: string) => {
+    if (!str) return '—';
+    try {
+      return new Date(str).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return str;
+    }
+  };
+
   return (
-    <>
+    <div style={{ width: '100%' }}>
       {isLoading && (
-        <div id="loadingOverlay" style={{ display: 'flex', opacity: 1 }}>
-          <div className="loader-wrapper">
-            <div className="loader"></div>
+        <div className="d-flex justify-content-center align-items-center" style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 9999 }}>
+          <div className="text-center">
+            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}></div>
+            <p className="mt-2 font-weight-bold">Loading approvals...</p>
           </div>
-          <div id="loaderText">Loading approvals workflow...</div>
         </div>
       )}
 
-      {/* Bulk Action Strip */}
-      <div id="bulkActionBar" className={selectedIds.size > 0 ? 'active' : ''}>
-        <div id="bulkActionBar-left">
-          <span id="bulkActionBar-count">{selectedIds.size} selected</span>
-        </div>
-        <div id="bulkActionBar-actions">
-          <button className="bulk-approve" onClick={() => handleBulkAction('Approved')} title="Approve Selected">
-            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span className="bulk-btn-text">Approve Selected</span>
-          </button>
-          <button className="bulk-reject" onClick={() => handleBulkAction('Rejected')} title="Reject Selected">
-            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-            <span className="bulk-btn-text">Reject Selected</span>
-          </button>
-          <button id="clearSelection" onClick={() => setSelectedIds(new Set())} title="Clear Selection">
-            Clear
-          </button>
-        </div>
-      </div>
-
-      {/* Sticky Breadcrumb and title */}
-      <div className="top-sticky-wrapper">
-        <header className="page-header desktop-only">
+      {/* Floating Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="alert alert-dark d-flex align-items-center justify-content-between shadow-lg px-4 py-3 border-0" style={{ position: 'fixed', bottom: '80px', left: '20px', right: '20px', zIndex: 1040, borderRadius: '12px' }}>
           <div>
-            <p className="page-breadcrumb">Cyrix Healthcare / Action Required</p>
-            <h1 className="page-title">Approval Center</h1>
-            <p style={{ fontSize: '14px', color: 'var(--text-3)', marginTop: '4px' }}>Review and action pending claims</p>
+            <i className="fas fa-tasks mr-2 text-warning"></i>
+            <span className="font-weight-bold">{selectedIds.size} items selected for batch action</span>
           </div>
-          <div className="page-header-right">
-            <button className="btn btn-outline" onClick={loadData}>
-              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
-              </svg>
-              Refresh
+          <div className="d-flex" style={{ gap: '10px' }}>
+            <button className="btn btn-success btn-sm font-weight-bold" onClick={() => handleBulkAction('Approved')}>
+              <i className="fas fa-check-double mr-1"></i> Approve Selected
+            </button>
+            <button className="btn btn-danger btn-sm font-weight-bold" onClick={() => handleBulkAction('Rejected')}>
+              <i className="fas fa-ban mr-1"></i> Reject Selected
+            </button>
+            <button className="btn btn-light btn-sm" onClick={() => setSelectedIds(new Set())}>Clear</button>
+          </div>
+        </div>
+      )}
+
+      {/* Header section */}
+      <div className="row align-items-center mb-4">
+        <div className="col-sm-6">
+          <h1 className="m-0 font-weight-bold text-dark h3">
+            <i className="fas fa-check-circle mr-2 text-success"></i> Approval Center
+          </h1>
+          <p className="text-muted mb-0" style={{ fontSize: '13px' }}>Review, edit, and approve pending claims and limit extensions.</p>
+        </div>
+        <div className="col-sm-6 text-sm-right mt-3 mt-sm-0">
+          <div className="d-inline-flex align-items-center w-100 justify-content-sm-end" style={{ gap: '10px' }}>
+            <div className="input-group" style={{ maxWidth: '300px' }}>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Search queries..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="input-group-append">
+                <span className="input-group-text"><i className="fas fa-search"></i></span>
+              </div>
+            </div>
+            <button className="btn btn-outline-secondary" onClick={loadData}>
+              <i className="fas fa-sync-alt mr-1"></i> Refresh
             </button>
           </div>
-        </header>
+        </div>
       </div>
 
-      <div className="content-area">
-        {/* STATS */}
-        <div className="stats-row">
-          <div className="stat-card">
-            <div className="stat-icon pending">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+      {/* STATS SMALL BOXES */}
+      <div className="row mb-3">
+        <div className="col-lg-3 col-6">
+          <div className="small-box bg-warning text-white shadow-sm">
+            <div className="inner">
+              <h3 className="text-white">{pendingCount}</h3>
+              <p className="text-white">Pending Requests</p>
             </div>
-            <div className="stat-info">
-              <p>Pending Action</p>
-              <h3>{pendingCount}</h3>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon total">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth="2.5" />
-                <circle cx="12" cy="12" r="2" strokeWidth="2.5" />
-                <path d="M6 12h.01M18 12h.01" strokeWidth="2.5" />
-              </svg>
-            </div>
-            <div className="stat-info">
-              <p>Total Amount</p>
-              <h3>₹{pendingAmountSum.toFixed(0)}</h3>
+            <div className="icon text-white" style={{ opacity: 0.3 }}>
+              <i className="fas fa-hourglass-half text-white"></i>
             </div>
           </div>
         </div>
-
-        {/* Filters and search box */}
-        <div className="controls-row">
-          <div className="search-box input-with-icon" style={{ flex: 1, maxWidth: '100%' }}>
-            <svg className="input-icon" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search by name, ID, type..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className="col-lg-3 col-6">
+          <div className="small-box bg-success shadow-sm">
+            <div className="inner">
+              <h3>₹{pendingAmountSum.toLocaleString('en-IN')}</h3>
+              <p>Pending Expense Sum</p>
+            </div>
+            <div className="icon">
+              <i className="fas fa-money-bill-wave"></i>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Mobile select all toggle */}
-        <div className="mobile-select-all hide-desktop" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', background: 'white', borderRadius: '12px', marginBottom: '16px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
-          <input
-            type="checkbox"
-            className="table-checkbox"
-            checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length}
-            onChange={(e) => toggleSelectAll(e.target.checked)}
-          />
-          <label style={{ fontSize: '14px', fontWeight: 700, color: 'var(--primary-dark)', flex: 1 }}>Select All Pending Actions</label>
-        </div>
-
-        <div className="table-card">
-          <div className="table-container">
-            <table id="expTable" className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px', textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      className="table-checkbox"
-                      checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length}
-                      onChange={(e) => toggleSelectAll(e.target.checked)}
-                    />
-                  </th>
-                  <th>ID</th>
-                  <th>Employee</th>
-                  <th>E-Code</th>
-                  <th>Type</th>
-                  <th>Date</th>
-                  <th>Details</th>
-                  <th className="amount-cell">Value/Amount</th>
-                  <th>Status</th>
-                  <th className="sticky-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedItems.length === 0 ? (
+      {/* DESKTOP TABLE VIEW */}
+      <div className="d-none d-md-block">
+        <div className="card card-success card-outline shadow-sm">
+          <div className="card-header border-bottom d-flex align-items-center justify-content-between p-3">
+            <h3 className="card-title font-weight-bold text-dark m-0">Awaiting Action</h3>
+            <div className="custom-control custom-checkbox">
+              <input
+                type="checkbox"
+                className="custom-control-input"
+                id="selectAllCheck"
+                checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length}
+                onChange={(e) => toggleSelectAll(e.target.checked)}
+              />
+              <label className="custom-control-label pl-2 font-weight-bold text-muted" htmlFor="selectAllCheck" style={{ fontSize: '13px' }}>Select All</label>
+            </div>
+          </div>
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table table-striped table-hover table-bordered mb-0 align-middle">
+                <thead className="bg-light text-secondary">
                   <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', padding: '60px', color: 'var(--text-3)', fontWeight: 600 }}>
-                      No items awaiting approval.
-                    </td>
+                    <th style={{ width: '40px' }} className="text-center">Select</th>
+                    <th>Request ID</th>
+                    <th>Employee</th>
+                    <th>E-Code</th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>District</th>
+                    <th>Value/Amount</th>
+                    <th>Status</th>
+                    <th className="text-center">Actions</th>
                   </tr>
-                ) : (
-                  paginatedItems.map((e) => {
-                    const isSelected = selectedIds.has(e.id);
-                    return (
-                      <tr key={e.id} className={isSelected ? 'selected' : ''} style={{ cursor: 'pointer' }}>
-                        <td style={{ textAlign: 'center' }} onClick={(ev) => { ev.stopPropagation(); toggleSelectRow(e.id); }}>
-                          <input
-                            type="checkbox"
-                            className="table-checkbox"
-                            checked={isSelected}
-                            readOnly
-                          />
-                        </td>
-                        <td data-label="ID" onClick={() => openPanel(e.id, e.type)}>
-                          <div className="cell-val">
-                            <span className="user-id-tag">{e.id}</span>
-                          </div>
-                        </td>
-                        <td data-label="Employee" onClick={() => openPanel(e.id, e.type)}>
-                          <div className="cell-val">
-                            <strong>{e.full_name}</strong>
-                          </div>
-                        </td>
-                        <td data-label="E-Code" onClick={() => openPanel(e.id, e.type)}><div className="cell-val">{e.e_code}</div></td>
-                        <td data-label="Type" onClick={() => openPanel(e.id, e.type)}>
-                          <div className="cell-val">
+                </thead>
+                <tbody>
+                  {paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="text-center p-5 text-muted">
+                        <i className="fas fa-check-double fa-3x mb-3 text-gray"></i>
+                        <p className="font-weight-bold mb-0">No pending approvals found.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedItems.map((e) => {
+                      const isSelected = selectedIds.has(e.id);
+                      return (
+                        <tr key={e.id} className={isSelected ? 'bg-light' : ''} style={{ cursor: 'pointer' }} onClick={() => openPanel(e.id, e.type)}>
+                          <td className="text-center" onClick={(ev) => { ev.stopPropagation(); toggleSelectRow(e.id); }}>
+                            <div className="custom-control custom-checkbox">
+                              <input
+                                type="checkbox"
+                                className="custom-control-input"
+                                checked={isSelected}
+                                readOnly
+                              />
+                              <label className="custom-control-label" style={{ cursor: 'pointer' }}></label>
+                            </div>
+                          </td>
+                          <td><span className="badge badge-light border font-weight-bold text-monospace">{e.id}</span></td>
+                          <td className="font-weight-bold text-primary">{e.full_name}</td>
+                          <td><span className="badge badge-secondary">{e.e_code}</span></td>
+                          <td>
                             {e.type === 'Limit' ? (
-                              <span style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>
-                                Limit ({e.req_type})
-                              </span>
+                              <span className="badge bg-warning text-white"><i className="fas fa-chart-bar mr-1"></i> Limit ({e.req_type})</span>
                             ) : (
-                              <span style={{ background: 'var(--info-light)', color: 'var(--info)', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>
-                                Expense
-                              </span>
+                              <span className="badge bg-info"><i className="fas fa-receipt mr-1"></i> Expense</span>
                             )}
-                          </div>
-                        </td>
-                        <td data-label="Date" onClick={() => openPanel(e.id, e.type)}><div className="cell-val">{e.date}</div></td>
-                        <td data-label="Details" onClick={() => openPanel(e.id, e.type)}><div className="cell-val" style={{ color: 'var(--text-2)', fontSize: '13px' }}>{e.district || '—'}</div></td>
-                        <td data-label="Value/Amount" className="amount-cell" onClick={() => openPanel(e.id, e.type)}>
-                          <div className="cell-val">
+                          </td>
+                          <td>{formatDate(e.date)}</td>
+                          <td>{e.district || '—'}</td>
+                          <td className="font-weight-bold">
                             {e.type === 'Limit' ? (
                               e.req_type === 'KM' ? `+${e.amount} KM` : `+₹${e.amount}`
                             ) : (
                               `₹${parseFloat(e.amount as any).toFixed(2)}`
                             )}
-                          </div>
-                        </td>
-                        <td data-label="Status" onClick={() => openPanel(e.id, e.type)}>
-                          <div className="cell-val">
-                            <span className="status-badge warning">{e.status}</span>
-                          </div>
-                        </td>
-                        <td data-label="Actions" onClick={(ev) => ev.stopPropagation()}>
-                          <div className="cell-val">
-                            <div className="action-btns">
+                          </td>
+                          <td>{getStatusBadge(e.status)}</td>
+                          <td className="text-center" onClick={(ev) => ev.stopPropagation()}>
+                            <div className="d-flex justify-content-center" style={{ gap: '6px' }}>
                               {e.type === 'Expense' && (
-                                <button className="btn-compact" onClick={() => triggerEditExpense(e.id)} title="Edit Claim">✎</button>
+                                <button className="btn btn-outline-secondary btn-xs" onClick={() => triggerEditExpense(e.id)} title="Edit Claim">
+                                  <i className="fas fa-edit"></i>
+                                </button>
                               )}
-                              <button className="btn-compact success" onClick={() => triggerApprove(e.id, e.type)} title="Approve">✓</button>
-                              <button className="btn-compact danger" onClick={() => triggerReject(e.id, e.type)} title="Reject">✕</button>
+                              <button className="btn btn-outline-success btn-xs" onClick={() => triggerApprove(e.id, e.type)} title="Approve">
+                                <i className="fas fa-check"></i>
+                              </button>
+                              <button className="btn btn-outline-danger btn-xs" onClick={() => triggerReject(e.id, e.type)} title="Reject">
+                                <i className="fas fa-times"></i>
+                              </button>
                             </div>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <button
-              style={{ background: 'white', border: '1px solid var(--border)', padding: '8px 14px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              ← Prev
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pgNum) => (
-              <button
-                key={pgNum}
-                style={{
-                  background: pgNum === currentPage ? 'var(--primary)' : 'white',
-                  color: pgNum === currentPage ? 'white' : 'var(--text)',
-                  border: `1px solid ${pgNum === currentPage ? 'var(--primary)' : 'var(--border)'}`,
-                  padding: '8px 14px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
-                }}
-                onClick={() => setCurrentPage(pgNum)}
-              >
-                {pgNum}
-              </button>
-            ))}
-            <button
-              style={{ background: 'white', border: '1px solid var(--border)', padding: '8px 14px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Detail Slide-in Panel */}
-      <div className={`detail-panel ${showPanel ? 'open' : ''}`}>
-        <div className="panel-header">
-          <div>
-            <h3>{panelItemType === 'Limit' ? 'Limit Extension Details' : 'Expense Claim Details'}</h3>
-            <p>{panelItemId}</p>
-          </div>
-          <button className="panel-close" onClick={() => setShowPanel(false)}>×</button>
-        </div>
-
-        <div className="panel-body">
-          {panelLoading && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-3)', fontWeight: 600 }}>
-              Loading...
-            </div>
-          )}
-
-          {detailData && panelItemType === 'Limit' && (
-            <>
-              <div className="sec-heading">Employee Details</div>
-              <div className="info-card">
-                <div className="info-row"><div className="info-label">Employee Name</div><div className="info-val">{detailData.request?.full_name}</div></div>
-                <div className="info-row"><div className="info-label">E-Code</div><div className="info-val">{detailData.request?.e_code}</div></div>
-                <div className="info-row"><div className="info-label">Grade</div><div className="info-val">{detailData.request?.grade}</div></div>
-                <div className="info-row"><div className="info-label">Home District</div><div className="info-val">{detailData.request?.district_name}</div></div>
-                <div className="info-row"><div className="info-label">Extension Request</div><div className="info-val" style={{ color: 'var(--warning)' }}>Monthly {detailData.request?.request_type} Limit</div></div>
-                <div className="info-row"><div className="info-label">Requested Value</div><div className="val-large" style={{ color: 'var(--danger)' }}>{detailData.request?.request_type === 'KM' ? `${detailData.request?.requested_value} KM` : `₹${detailData.request?.requested_value}`}</div></div>
-              </div>
-            </>
-          )}
-
-          {detailData && panelItemType === 'Expense' && (
-            <>
-              <div className="sec-heading">Employee Details</div>
-              <div className="info-card">
-                <div className="info-row"><div className="info-label">Employee Name</div><div className="info-val">{detailData.expense?.full_name}</div></div>
-                <div className="info-row"><div className="info-label">E-Code</div><div className="info-val">{detailData.expense?.e_code}</div></div>
-                <div className="info-row"><div className="info-label">Working Area / Districts</div><div className="info-val">{detailData.expense?.district}</div></div>
-              </div>
-
-              <div className="sec-heading">Expense Summary Breakup</div>
-              <div className="bk-grid">
-                <div className="bk-card"><div className="bk-label">Daily Allowance</div><div className="bk-val">₹{detailData.expense?.da_amount || 0}</div></div>
-                <div className="bk-card"><div className="bk-label">Hotel Expense</div><div className="bk-val">₹{detailData.expense?.hotel_amount || 0}</div></div>
-                <div className="bk-card"><div className="bk-label">Other Expense</div><div className="bk-val">₹{detailData.expense?.other_expense_amount || 0}</div></div>
-                <div className="bk-card"><div className="bk-label">Total Claimed</div><div className="bk-val total">₹{detailData.expense?.total_amount || 0}</div></div>
-              </div>
-
-              <div className="sec-heading">Leg-wise Journey Detail</div>
-              {(detailData.itineraries || []).map((leg, idx) => (
-                <div key={idx} className="leg-wrapper">
-                  <div className="leg-head">
-                    <div className="leg-head-left">
-                      <div className="leg-num">{leg.leg_number}</div>
-                      <div>
-                        <div className="leg-route">{leg.from_location} → {leg.to_location}</div>
-                        <div className="leg-sub">{leg.travel_type} · {leg.to_district}</div>
-                      </div>
-                    </div>
-                    <div className="leg-head-right">
-                      <div className="leg-total-amt">₹{(leg.travel_amount + leg.sub_amount + leg.da_amount + leg.hotel_amount + leg.other_amount).toFixed(2)}</div>
-                      <div className="leg-total-lbl">Leg Total</div>
-                    </div>
-                  </div>
-                  <div className="leg-body">
-                    <div className="nested-box">
-                      <div className="nb-grid">
-                        <div className="nb-item"><span className="nb-label">Travel Mode</span><span className="nb-val">{leg.travel_mode || '—'} ({leg.distance_km} KM)</span></div>
-                        <div className="nb-item"><span className="nb-label">Travel Cost</span><span className="nb-val">₹{leg.travel_amount}</span></div>
-                      </div>
-                      {leg.sub_mode && (
-                        <div className="nb-grid" style={{ marginTop: '12px' }}>
-                          <div className="nb-item"><span className="nb-label">Extra Conn Mode</span><span className="nb-val">{leg.sub_mode}</span></div>
-                          <div className="nb-item"><span className="nb-label">Extra Conn Cost</span><span className="nb-val">₹{leg.sub_amount}</span></div>
-                        </div>
-                      )}
-                    </div>
-                    {leg.leg_number === 1 && (
-                      <div className="nested-box">
-                        <div className="nb-grid">
-                          <div className="nb-item"><span className="nb-label">DA Amount</span><span className="nb-val">₹{leg.da_amount}</span></div>
-                          <div className="nb-item"><span className="nb-label">Hotel Amount</span><span className="nb-val">₹{leg.hotel_amount}</span></div>
-                        </div>
-                      </div>
-                    )}
-                    {leg.other_amount > 0 && (
-                      <div className="nested-box">
-                        <div className="nb-grid">
-                          <div className="nb-item"><span className="nb-label">Other Desc</span><span className="nb-val">{leg.other_desc || '—'}</span></div>
-                          <div className="nb-item"><span className="nb-label">Other Cost</span><span className="nb-val">₹{leg.other_amount}</span></div>
-                        </div>
-                      </div>
-                    )}
-                    {(leg.ws_assigned > 0 || leg.ws_closed > 0 || leg.ws_pms > 0 || leg.ws_asset > 0) && (
-                      <div className="nested-box">
-                        <div className="leg-sec-title">Work Summary</div>
-                        <div className="nb-grid-4">
-                          <div className="nb-item"><span className="nb-label">Assigned</span><span className="nb-val">{leg.ws_assigned}</span></div>
-                          <div className="nb-item"><span className="nb-label">Closed</span><span className="nb-val">{leg.ws_closed}</span></div>
-                          <div className="nb-item"><span className="nb-label">PMS</span><span className="nb-val">{leg.ws_pms}</span></div>
-                          <div className="nb-item"><span className="nb-label">Asset Tag</span><span className="nb-val">{leg.ws_asset}</span></div>
-                        </div>
-                      </div>
-                    )}
-                    <div style={{ marginTop: '12px' }}>
-                      <span className="nb-label">Visit Purpose:</span> <span style={{ fontSize: '13px', fontWeight: 600 }}>{leg.visit_purpose || '—'}</span>
-                    </div>
-
-                    {/* Image Attachments */}
-                    {leg.attachments && leg.attachments.length > 0 && (
-                      <div style={{ marginTop: '16px' }}>
-                        <div className="leg-sec-title">Uploaded Attachments</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>
-                          {leg.attachments.map((att, aIdx) => (
-                            <a
-                              key={aIdx}
-                              href={att.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="att-box"
-                            >
-                              <img
-                                className="att-thumb-img"
-                                src={att.url}
-                                alt={att.bill_type}
-                                onError={(e) => { e.currentTarget.src = '/logo.png'; }}
-                              />
-                              <span className="att-lbl">{att.bill_type.replace('_', ' ')}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-
-        {/* Panel Sticky Footer */}
-        {detailData && (
-          <div className="panel-footer">
-            <button className="pf-btn btn-p-close" onClick={() => setShowPanel(false)}>Close</button>
-            {detailData.can_action ? (
-              <>
-                {panelItemType === 'Limit' ? (
-                  <button className="pf-btn btn-p-edit" onClick={() => triggerEditLimit(panelItemId!, detailData.request?.requested_value)}>Edit</button>
-                ) : (
-                  <button className="pf-btn btn-p-edit" onClick={() => triggerEditExpense(panelItemId!)}>Edit</button>
-                )}
-                <button className="pf-btn btn-p-reject" onClick={() => triggerReject(panelItemId!, panelItemType!)}>Reject</button>
-                <button className="pf-btn btn-p-approve" onClick={() => triggerApprove(panelItemId!, panelItemType!)}>Approve</button>
-              </>
-            ) : (
-              <span style={{ gridColumn: '1 / -1', textAlign: 'center', fontSize: '12px', color: 'var(--text-3)', fontWeight: 600, padding: '10px' }}>
-                Item stage already processed.
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Panel Backdrop overlay */}
-      {showPanel && <div className="panel-overlay active" onClick={() => setShowPanel(false)}></div>}
-
-      {/* Approve Confirm Modal */}
-      {showApproveModal && (
-        <div className="modal-overlay active" onClick={() => setShowApproveModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
-            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'var(--success-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-              <svg width="32" height="32" fill="none" stroke="var(--success)" strokeWidth="2.5" viewBox="0 0 24 24">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <h3 className="modal-title" style={{ textAlign: 'center', fontSize: '18px', color: 'var(--primary-dark)', margin: '0 0 8px', fontWeight: 800 }}>Approve Request</h3>
-            <p style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: '14px', marginBottom: '24px', fontWeight: 500 }}>
-              Are you sure you want to approve this {actionType === 'Limit' ? 'limit request' : 'expense claim'}?
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button className="btn btn-outline" onClick={() => setShowApproveModal(false)} style={{ flex: 1 }}>Cancel</button>
-              <button className="btn btn-primary" onClick={submitApprove} style={{ flex: 1, background: 'var(--success)' }}>
-                Confirm Approve
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <div className="modal-overlay active" onClick={() => setShowRejectModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
-            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'var(--danger-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-              <svg width="32" height="32" fill="none" stroke="var(--danger)" strokeWidth="2.5" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="15" y1="9" x2="9" y2="15" />
-                <line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
-            </div>
-            <h3 className="modal-title" style={{ textAlign: 'center', fontSize: '18px', color: 'var(--primary-dark)', margin: '0 0 8px', fontWeight: 800 }}>Reject Request</h3>
-            <p style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: '14px', marginBottom: '20px', fontWeight: 500 }}>Provide a clear reason for rejecting this request.</p>
-
-            <div style={{ width: '100%' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-3)', marginBottom: '8px', textTransform: 'uppercase' }}>Rejection Reason <span style={{ color: 'var(--danger)' }}>*</span></label>
-              <textarea
-                rows={4}
-                placeholder="State the reason clearly..."
-                value={rejectReason}
-                onChange={(e) => { setRejectReason(e.target.value); setRejectError(false); }}
-                style={{ width: '100%', padding: '12px 16px', border: '1.5px solid var(--border)', borderRadius: '8px', fontFamily: 'var(--font)', fontSize: '14px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-              />
-              {rejectError && <p style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '6px', fontWeight: 600 }}>Rejection reason is required!</p>}
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', width: '100%' }}>
-              <button className="btn btn-outline" onClick={() => setShowRejectModal(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={submitReject} style={{ background: 'var(--danger)', color: 'white' }}>
-                Confirm Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Limit Amount Modal */}
-      {showEditLimitModal && (
-        <div className="modal-overlay active" onClick={() => setShowEditLimitModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="panel-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border)', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'transparent', boxShadow: 'none', position: 'static' }}>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '18px' }}>✎ Edit Limit Amount</h3>
-              <button className="panel-close" onClick={() => setShowEditLimitModal(false)}>×</button>
-            </div>
-            <div style={{ paddingTop: '8px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>Requested Value</label>
-              <input
-                type="number"
-                value={editLimitValue}
-                onChange={(e) => setEditLimitValue(e.target.value)}
-                style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontFamily: 'var(--font)', fontSize: '16px', fontWeight: 700, boxSizing: 'border-box', outline: 'none' }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
-              <button className="btn btn-outline" onClick={() => setShowEditLimitModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={submitEditLimit}>Save Changes</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manager Edit Expense Form Modal */}
-      {showEditExpenseModal && (
-        <div className="modal-overlay active" onClick={() => setShowEditExpenseModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="panel-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border)', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'transparent', boxShadow: 'none', position: 'static' }}>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '18px' }}>✎ Edit Expense Claim: {actionId}</h3>
-              <button className="panel-close" onClick={() => setShowEditExpenseModal(false)}>×</button>
-            </div>
-
-            {editModalLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '40px', color: 'var(--text-3)', fontWeight: 600 }}>
-                Loading editor...
-              </div>
-            ) : (
-              <div style={{ maxHeight: '65vh', overflowY: 'auto', paddingRight: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--surface-2)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  <div>
-                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>DA Amount</label>
-                    <input
-                      type="number"
-                      value={editFormValues.da_amount}
-                      onChange={(e) => {
-                        const nextForm = { ...editFormValues, da_amount: parseFloat(e.target.value) || 0 };
-                        nextForm.total_amount = recalculateEditTotal(nextForm);
-                        setEditFormValues(nextForm);
-                      }}
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontFamily: 'var(--font)', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>Hotel Amount</label>
-                    <input
-                      type="number"
-                      value={editFormValues.hotel_amount}
-                      onChange={(e) => {
-                        const nextForm = { ...editFormValues, hotel_amount: parseFloat(e.target.value) || 0 };
-                        nextForm.total_amount = recalculateEditTotal(nextForm);
-                        setEditFormValues(nextForm);
-                      }}
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontFamily: 'var(--font)', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>Other Amount</label>
-                    <input
-                      type="number"
-                      value={editFormValues.other_expense_amount}
-                      onChange={(e) => {
-                        const nextForm = { ...editFormValues, other_expense_amount: parseFloat(e.target.value) || 0 };
-                        nextForm.total_amount = recalculateEditTotal(nextForm);
-                        setEditFormValues(nextForm);
-                      }}
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontFamily: 'var(--font)', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>Total Amount</label>
-                    <input
-                      type="number"
-                      value={editFormValues.total_amount}
-                      readOnly
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--success)', background: 'var(--success-light)', fontWeight: 800, color: 'var(--success)', fontSize: '16px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '24px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--primary-dark)', textTransform: 'uppercase', marginBottom: '16px', display: 'block', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
-                    Itinerary Adjustment
-                  </label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    {editFormValues.legs.map((leg, idx) => {
-                      const isOutdoor = leg.travel_type === 'Outdoor';
-                      const legAllowedModes = ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'];
-                      const legFromList = getFacilityDropdownList(leg.from_district);
-                      const legToList = getFacilityDropdownList(leg.to_district);
-
-                      return (
-                        <div key={leg.id} style={{ border: '1px solid var(--border)', borderLeft: '4px solid var(--primary-light)', padding: '20px', borderRadius: '12px', background: 'var(--surface)' }}>
-                          <h4 style={{ margin: '0 0 16px', fontSize: '15px', color: 'var(--primary-dark)', fontWeight: 800 }}>Leg {idx + 1}</h4>
-
-                          <div className="travel-type-toggle" style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-                            <label className="toggle-option" style={{ flex: 1 }}>
-                              <input
-                                type="radio"
-                                name={`edit_travel_type_${idx}`}
-                                value="In-District"
-                                checked={leg.travel_type === 'In-District'}
-                                onChange={() => handleEditTravelTypeToggle(idx, 'In-District')}
-                                style={{ display: 'none' }}
-                              />
-                              <span className="toggle-label" style={{
-                                display: 'block', padding: '10px', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'center', fontWeight: 600, cursor: 'pointer',
-                                background: leg.travel_type === 'In-District' ? 'var(--primary-50)' : 'var(--surface-2)',
-                                color: leg.travel_type === 'In-District' ? 'var(--primary)' : 'inherit',
-                                borderColor: leg.travel_type === 'In-District' ? 'var(--primary-light)' : 'var(--border)'
-                              }}>In-District</span>
-                            </label>
-                            <label className="toggle-option" style={{ flex: 1 }}>
-                              <input
-                                type="radio"
-                                name={`edit_travel_type_${idx}`}
-                                value="Outdoor"
-                                checked={leg.travel_type === 'Outdoor'}
-                                onChange={() => handleEditTravelTypeToggle(idx, 'Outdoor')}
-                                style={{ display: 'none' }}
-                              />
-                              <span className="toggle-label" style={{
-                                display: 'block', padding: '10px', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'center', fontWeight: 600, cursor: 'pointer',
-                                background: leg.travel_type === 'Outdoor' ? 'var(--primary-50)' : 'var(--surface-2)',
-                                color: leg.travel_type === 'Outdoor' ? 'var(--primary)' : 'inherit',
-                                borderColor: leg.travel_type === 'Outdoor' ? 'var(--primary-light)' : 'var(--border)'
-                              }}>Outdoor</span>
-                            </label>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                            {isOutdoor && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>From District</label>
-                                <select
-                                  value={leg.from_district}
-                                  onChange={(e) => updateEditLeg(idx, 'from_district', e.target.value)}
-                                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }}
-                                >
-                                  {getDistrictDropdowns()}
-                                </select>
-                              </div>
-                            )}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>To District</label>
-                              <select
-                                value={leg.to_district}
-                                disabled={!isOutdoor}
-                                onChange={(e) => updateEditLeg(idx, 'to_district', e.target.value)}
-                                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px', background: !isOutdoor ? 'var(--surface-2)' : 'transparent' }}
-                              >
-                                {getDistrictDropdowns()}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>From Location</label>
-                              <input
-                                type="text"
-                                placeholder="Type location..."
-                                list={`edit_list_from_${idx}`}
-                                value={leg.from_location}
-                                onChange={(e) => updateEditLeg(idx, 'from_location', e.target.value)}
-                                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }}
-                              />
-                              <datalist id={`edit_list_from_${idx}`}>
-                                {legFromList.map(f => <option key={f} value={f} />)}
-                              </datalist>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>To Location</label>
-                              <input
-                                type="text"
-                                placeholder="Type location..."
-                                list={`edit_list_to_${idx}`}
-                                value={leg.to_location}
-                                onChange={(e) => updateEditLeg(idx, 'to_location', e.target.value)}
-                                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }}
-                              />
-                              <datalist id={`edit_list_to_${idx}`}>
-                                {legToList.map(t => <option key={t} value={t} />)}
-                              </datalist>
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Travel Mode</label>
-                              <select
-                                value={leg.travel_mode}
-                                onChange={(e) => updateEditLeg(idx, 'travel_mode', e.target.value)}
-                                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }}
-                              >
-                                <option value="">Select</option>
-                                {legAllowedModes.map(m => <option key={m} value={m}>{m}</option>)}
-                              </select>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Distance (KM)</label>
-                              <input
-                                type="number"
-                                readOnly={!['Bike', 'Car'].includes(leg.travel_mode)}
-                                value={leg.distance_km}
-                                onChange={(e) => updateEditLeg(idx, 'distance_km', parseFloat(e.target.value) || 0)}
-                                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px', background: !['Bike', 'Car'].includes(leg.travel_mode) ? 'var(--surface-2)' : 'transparent' }}
-                              />
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase' }}>Travel ₹</label>
-                              <input
-                                type="number"
-                                value={leg.travel_amount}
-                                onChange={(e) => {
-                                  updateEditLeg(idx, 'travel_amount', parseFloat(e.target.value) || 0);
-                                }}
-                                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '15px', fontWeight: 700 }}
-                              />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Sub Mode & ₹</label>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <input
-                                  type="text"
-                                  placeholder="Mode"
-                                  value={leg.sub_mode}
-                                  onChange={(e) => updateEditLeg(idx, 'sub_mode', e.target.value)}
-                                  style={{ width: '50%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }}
-                                />
-                                <input
-                                  type="number"
-                                  placeholder="₹"
-                                  value={leg.sub_amount}
-                                  onChange={(e) => {
-                                    updateEditLeg(idx, 'sub_amount', parseFloat(e.target.value) || 0);
-                                  }}
-                                  style={{ width: '50%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '15px', fontWeight: 700, color: 'var(--primary)' }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', margin: '16px 0 8px', borderTop: '1px dashed var(--border)', paddingTop: '12px' }}>Work Summary</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Assigned</label>
-                              <input type="number" value={leg.ws_assigned} onChange={(e) => updateEditLeg(idx, 'ws_assigned', parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Closed</label>
-                              <input type="number" value={leg.ws_closed} onChange={(e) => updateEditLeg(idx, 'ws_closed', parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>PMS</label>
-                              <input type="number" value={leg.ws_pms} onChange={(e) => updateEditLeg(idx, 'ws_pms', parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Asset</label>
-                              <input type="number" value={leg.ws_asset} onChange={(e) => updateEditLeg(idx, 'ws_asset', parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }} />
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Visit Purpose</label>
-                            <input
-                              type="text"
-                              value={leg.visit_purpose}
-                              onChange={(e) => updateEditLeg(idx, 'visit_purpose', e.target.value)}
-                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '14px' }}
-                            />
-                          </div>
-                        </div>
+                          </td>
+                        </tr>
                       );
-                    })}
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '24px' }}>
-                  <button type="button" onClick={addNewEditLeg} style={{ width: '100%', padding: '14px', background: 'var(--primary-50)', border: '2px dashed var(--primary)', color: 'var(--primary)', borderRadius: '10px', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>
-                    + Add New Journey Leg
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                  <button className="btn btn-outline" onClick={() => setShowEditExpenseModal(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={submitEditExpense}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                      <polyline points="17 21 17 13 7 13 7 21" />
-                      <polyline points="7 3 7 8 15 8" />
-                    </svg>
-                    Save Changes
-                  </button>
-                </div>
-              </div>
-            )}
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* MOBILE CARD VIEW */}
+      <div className="d-md-none">
+        {paginatedItems.length === 0 ? (
+          <div className="card card-body text-center p-5 text-muted shadow-sm">
+            <i className="fas fa-check-double fa-3x mb-3 text-gray"></i>
+            <p className="font-weight-bold mb-0">No pending approvals found.</p>
+          </div>
+        ) : (
+          paginatedItems.map((e) => {
+            const isSelected = selectedIds.has(e.id);
+            return (
+              <div className="card card-success card-outline shadow-sm mb-3" key={e.id} onClick={() => openPanel(e.id, e.type)}>
+                <div className="card-header p-3 d-flex align-items-center justify-content-between">
+                  <div className="d-flex align-items-center">
+                    <div onClick={(ev) => { ev.stopPropagation(); toggleSelectRow(e.id); }} className="mr-3">
+                      <div className="custom-control custom-checkbox">
+                        <input type="checkbox" className="custom-control-input" checked={isSelected} readOnly />
+                        <label className="custom-control-label"></label>
+                      </div>
+                    </div>
+                    <div>
+                      <h6 className="font-weight-bold text-primary mb-0">{e.full_name}</h6>
+                      <small className="text-muted">{e.e_code} · {formatDate(e.date)}</small>
+                    </div>
+                  </div>
+                  <span className="badge badge-light border text-monospace">{e.id}</span>
+                </div>
+                <div className="card-body p-3 text-secondary" style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                  <div className="row">
+                    <div className="col-6"><strong>Type:</strong> {e.type} {e.req_type ? `(${e.req_type})` : ''}</div>
+                    <div className="col-6"><strong>District:</strong> {e.district || '—'}</div>
+                    <div className="col-12 mt-1">
+                      <strong>Amount:</strong>{' '}
+                      <span className="text-dark font-weight-bold">
+                        {e.type === 'Limit' ? (
+                          e.req_type === 'KM' ? `+${e.amount} KM` : `+₹${e.amount}`
+                        ) : (
+                          `₹${parseFloat(e.amount as any).toFixed(2)}`
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <hr className="my-2" />
+                  <div className="d-flex align-items-center justify-content-between" onClick={(ev) => ev.stopPropagation()}>
+                    <span>{getStatusBadge(e.status)}</span>
+                    <div className="d-flex" style={{ gap: '8px' }}>
+                      {e.type === 'Expense' && (
+                        <button className="btn btn-outline-secondary btn-xs py-1 px-2" onClick={() => triggerEditExpense(e.id)}>
+                          <i className="fas fa-edit mr-1"></i> Edit
+                        </button>
+                      )}
+                      <button className="btn btn-success btn-xs py-1 px-2" onClick={() => triggerApprove(e.id, e.type)}>
+                        <i className="fas fa-check mr-1"></i> Approve
+                      </button>
+                      <button className="btn btn-danger btn-xs py-1 px-2" onClick={() => triggerReject(e.id, e.type)}>
+                        <i className="fas fa-times mr-1"></i> Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* DETAIL SLIDE-OVER PANEL */}
+      {showPanel && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1040 }} onClick={() => setShowPanel(false)}></div>
+          <div className="card shadow-lg" style={{
+            position: 'fixed',
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: '100%',
+            maxWidth: '600px',
+            zIndex: 1050,
+            borderRadius: 0,
+            margin: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'slideInRight 0.3s ease both'
+          }}>
+            <div className="card-header bg-dark text-white border-0 d-flex justify-content-between align-items-center p-3">
+              <div>
+                <h4 className="card-title font-weight-bold text-white m-0">
+                  <i className="fas fa-search-plus mr-2 text-white"></i>
+                  {panelItemType === 'Limit' ? 'Limit Extension Details' : 'Expense Claim Details'}
+                </h4>
+                <small className="text-light d-block mt-1">{panelItemId}</small>
+              </div>
+              <button className="close text-white" onClick={() => setShowPanel(false)} style={{ background: 'none', border: 'none', outline: 'none', fontSize: '24px' }}>&times;</button>
+            </div>
+            
+            <div className="card-body p-4" style={{ overflowY: 'auto', flex: 1 }}>
+              {panelLoading ? (
+                <div className="text-center p-5">
+                  <i className="fas fa-spinner fa-spin fa-2x text-primary mb-3"></i>
+                  <p className="font-weight-bold">Fetching details...</p>
+                </div>
+              ) : detailData && panelItemType === 'Limit' ? (
+                <div>
+                  <h6 className="font-weight-bold text-uppercase text-secondary border-bottom pb-2 mb-3">Employee Details</h6>
+                  <div className="row text-secondary" style={{ fontSize: '14px', lineHeight: '2' }}>
+                    <div className="col-5"><strong>Employee Name:</strong></div><div className="col-7 text-dark">{detailData.request?.full_name}</div>
+                    <div className="col-5"><strong>Employee Code:</strong></div><div className="col-7 text-dark"><span className="badge badge-secondary">{detailData.request?.e_code}</span></div>
+                    <div className="col-5"><strong>Grade:</strong></div><div className="col-7 text-dark">{detailData.request?.grade}</div>
+                    <div className="col-5"><strong>District:</strong></div><div className="col-7 text-dark">{detailData.request?.district_name}</div>
+                    <div className="col-5"><strong>Limit Type:</strong></div><div className="col-7 text-dark"><span className="badge badge-warning text-white">{detailData.request?.request_type} Extension</span></div>
+                    <div className="col-5"><strong>Requested Value:</strong></div><div className="col-7 text-danger font-weight-bold" style={{ fontSize: '16px' }}>{detailData.request?.request_type === 'KM' ? `${detailData.request?.requested_value} KM` : `₹${detailData.request?.requested_value}`}</div>
+                  </div>
+                </div>
+              ) : detailData && panelItemType === 'Expense' ? (
+                <div>
+                  <h6 className="font-weight-bold text-uppercase text-secondary border-bottom pb-2 mb-3">Employee Details</h6>
+                  <div className="row text-secondary mb-4" style={{ fontSize: '14px', lineHeight: '2' }}>
+                    <div className="col-5"><strong>Employee Name:</strong></div><div className="col-7 text-dark font-weight-bold">{detailData.expense?.full_name}</div>
+                    <div className="col-5"><strong>Employee Code:</strong></div><div className="col-7 text-dark"><span className="badge badge-secondary">{detailData.expense?.e_code}</span></div>
+                    <div className="col-5"><strong>Area / District:</strong></div><div className="col-7 text-dark">{detailData.expense?.district}</div>
+                  </div>
+
+                  <h6 className="font-weight-bold text-uppercase text-secondary border-bottom pb-2 mb-3">Expense Summary</h6>
+                  <div className="row mb-4">
+                    <div className="col-3 text-center">
+                      <div className="p-2 border rounded bg-light">
+                        <small className="text-muted text-uppercase d-block" style={{ fontSize: '9px' }}>DA</small>
+                        <strong style={{ fontSize: '14px' }}>₹{detailData.expense?.da_amount || 0}</strong>
+                      </div>
+                    </div>
+                    <div className="col-3 text-center">
+                      <div className="p-2 border rounded bg-light">
+                        <small className="text-muted text-uppercase d-block" style={{ fontSize: '9px' }}>Hotel</small>
+                        <strong style={{ fontSize: '14px' }}>₹{detailData.expense?.hotel_amount || 0}</strong>
+                      </div>
+                    </div>
+                    <div className="col-3 text-center">
+                      <div className="p-2 border rounded bg-light">
+                        <small className="text-muted text-uppercase d-block" style={{ fontSize: '9px' }}>Other</small>
+                        <strong style={{ fontSize: '14px' }}>₹{detailData.expense?.other_expense_amount || 0}</strong>
+                      </div>
+                    </div>
+                    <div className="col-3 text-center">
+                      <div className="p-2 border rounded bg-success-light text-success border-success">
+                        <small className="text-success text-uppercase d-block" style={{ fontSize: '9px' }}>Total</small>
+                        <strong style={{ fontSize: '14px' }}>₹{detailData.expense?.total_amount || 0}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h6 className="font-weight-bold text-uppercase text-secondary border-bottom pb-2 mb-3">Leg-wise Journey Detail</h6>
+                  {(detailData.itineraries || []).map((leg, idx) => (
+                    <div key={idx} className="card card-secondary card-outline shadow-sm mb-3">
+                      <div className="card-header p-3 d-flex justify-content-between align-items-center border-bottom-0">
+                        <div className="d-flex align-items-center">
+                          <span className="badge badge-secondary mr-2" style={{ borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{leg.leg_number}</span>
+                          <span className="font-weight-bold text-dark" style={{ fontSize: '14px' }}>{leg.from_location} &rarr; {leg.to_location}</span>
+                        </div>
+                        <span className="text-primary font-weight-bold">₹{(leg.travel_amount + leg.sub_amount + leg.da_amount + leg.hotel_amount + leg.other_amount).toFixed(2)}</span>
+                      </div>
+                      <div className="card-body p-3 pt-0 text-secondary" style={{ fontSize: '13px' }}>
+                        <div className="p-2 border rounded bg-light mb-2">
+                          <div className="row">
+                            <div className="col-6"><strong>Mode:</strong> {leg.travel_mode || '—'} ({leg.distance_km} KM)</div>
+                            <div className="col-6"><strong>Travel cost:</strong> ₹{leg.travel_amount}</div>
+                          </div>
+                          {leg.sub_mode && (
+                            <div className="row mt-1 border-top pt-1">
+                              <div className="col-6"><strong>Submode:</strong> {leg.sub_mode}</div>
+                              <div className="col-6"><strong>Sub cost:</strong> ₹{leg.sub_amount}</div>
+                            </div>
+                          )}
+                        </div>
+                        {leg.leg_number === 1 && (
+                          <div className="p-2 border rounded bg-light mb-2">
+                            <div className="row">
+                              <div className="col-6"><strong>DA Amount:</strong> ₹{leg.da_amount}</div>
+                              <div className="col-6"><strong>Hotel Amount:</strong> ₹{leg.hotel_amount}</div>
+                            </div>
+                          </div>
+                        )}
+                        {leg.other_amount > 0 && (
+                          <div className="p-2 border rounded bg-light mb-2">
+                            <div className="row">
+                              <div className="col-6"><strong>Other desc:</strong> {leg.other_desc || '—'}</div>
+                              <div className="col-6"><strong>Other cost:</strong> ₹{leg.other_amount}</div>
+                            </div>
+                          </div>
+                        )}
+                        {(leg.ws_assigned > 0 || leg.ws_closed > 0 || leg.ws_pms > 0 || leg.ws_asset > 0) && (
+                          <div className="p-2 border rounded bg-light mb-2">
+                            <strong className="text-secondary d-block mb-1 text-uppercase" style={{ fontSize: '9px' }}>Work Summary</strong>
+                            <div className="row text-center font-weight-bold text-dark">
+                              <div className="col-3"><small className="d-block text-muted">Assign</small>{leg.ws_assigned}</div>
+                              <div className="col-3"><small className="d-block text-muted">Closed</small>{leg.ws_closed}</div>
+                              <div className="col-3"><small className="d-block text-muted">PMS</small>{leg.ws_pms}</div>
+                              <div className="col-3"><small className="d-block text-muted">Asset</small>{leg.ws_asset}</div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="mt-2">
+                          <strong>Visit Purpose:</strong> {leg.visit_purpose || '—'}
+                        </div>
+
+                        {/* Attachments */}
+                        {leg.attachments && leg.attachments.length > 0 && (
+                          <div className="mt-3">
+                            <strong className="text-secondary d-block mb-2 text-uppercase" style={{ fontSize: '9px' }}>Bill Attachments</strong>
+                            <div className="d-flex flex-wrap" style={{ gap: '10px' }}>
+                              {leg.attachments.map((att, aIdx) => (
+                                <a key={aIdx} href={att.url} target="_blank" rel="noreferrer" className="d-inline-block p-1 border rounded text-center" style={{ width: '80px', textDecoration: 'none', background: '#fff' }}>
+                                  <img src={att.url} alt={att.bill_type} className="img-thumbnail" style={{ width: '70px', height: '60px', objectFit: 'cover' }} onError={(e) => { e.currentTarget.src = '/logo.png'; }} />
+                                  <span className="d-block text-muted text-uppercase mt-1" style={{ fontSize: '8px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{att.bill_type.replace('_', ' ')}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            
+            <div className="card-footer bg-light border-0 p-3 d-flex" style={{ gap: '10px' }}>
+              <button className="btn btn-secondary flex-fill btn-sm" onClick={() => setShowPanel(false)}>Close</button>
+              {detailData && detailData.can_action ? (
+                <>
+                  {panelItemType === 'Limit' ? (
+                    <button className="btn btn-outline-primary flex-fill btn-sm" onClick={() => triggerEditLimit(panelItemId!, detailData.request?.requested_value)}><i className="fas fa-edit mr-1"></i> Edit</button>
+                  ) : (
+                    <button className="btn btn-outline-primary flex-fill btn-sm" onClick={() => triggerEditExpense(panelItemId!)}><i className="fas fa-edit mr-1"></i> Edit</button>
+                  )}
+                  <button className="btn btn-danger flex-fill btn-sm" onClick={() => triggerReject(panelItemId!, panelItemType!)}><i className="fas fa-ban mr-1"></i> Reject</button>
+                  <button className="btn btn-success flex-fill btn-sm" onClick={() => triggerApprove(panelItemId!, panelItemType!)}><i className="fas fa-check mr-1"></i> Approve</button>
+                </>
+              ) : (
+                <div className="text-center w-100 font-weight-bold text-muted" style={{ fontSize: '13px' }}>This request has already been processed.</div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Local toast alerts */}
-      <div className="toast-container">
+      {/* BOOTSTRAP APPROVE CONFIRM MODAL */}
+      {showApproveModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1060 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1070 }} tabIndex={-1} role="dialog" onClick={() => setShowApproveModal(false)}>
+            <div className="modal-dialog modal-dialog-centered modal-sm" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-body text-center p-4">
+                  <div className="text-success mb-3" style={{ fontSize: '40px' }}><i className="fas fa-check-circle"></i></div>
+                  <h5 className="font-weight-bold">Confirm Approval</h5>
+                  <p className="text-muted" style={{ fontSize: '13px' }}>Are you sure you want to approve this {actionType === 'Limit' ? 'limit request' : 'expense claim'} ({actionId})?</p>
+                  <div className="d-flex" style={{ gap: '10px' }}>
+                    <button type="button" className="btn btn-secondary flex-fill btn-sm" onClick={() => setShowApproveModal(false)}>Cancel</button>
+                    <button type="button" className="btn btn-success flex-fill btn-sm" onClick={submitApprove}>Approve</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* BOOTSTRAP REJECT MODAL */}
+      {showRejectModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1060 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1070 }} tabIndex={-1} role="dialog" onClick={() => setShowRejectModal(false)}>
+            <div className="modal-dialog modal-dialog-centered" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-danger text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white"><i className="fas fa-ban mr-2 text-white"></i> Reject Request</h5>
+                  <button type="button" className="close text-white" onClick={() => setShowRejectModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body p-4">
+                  <p className="text-muted" style={{ fontSize: '13px' }}>Please state the reason for rejecting request: <span className="font-weight-bold text-dark">{actionId}</span>.</p>
+                  <div className="form-group mb-2">
+                    <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Rejection Reason <span className="text-danger">*</span></label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      placeholder="State reason here..."
+                      value={rejectReason}
+                      onChange={(e) => { setRejectReason(e.target.value); setRejectError(false); }}
+                    />
+                    {rejectError && <small className="text-danger font-weight-bold d-block mt-1">Rejection reason is required!</small>}
+                  </div>
+                </div>
+                <div className="modal-footer bg-light border-top-0 justify-content-end p-3">
+                  <button type="button" className="btn btn-secondary px-4 btn-sm" onClick={() => setShowRejectModal(false)}>Cancel</button>
+                  <button type="button" className="btn btn-danger px-4 btn-sm" onClick={submitReject}>Confirm Reject</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* BOOTSTRAP EDIT LIMIT VALUE MODAL */}
+      {showEditLimitModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1060 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1070 }} tabIndex={-1} role="dialog" onClick={() => setShowEditLimitModal(false)}>
+            <div className="modal-dialog modal-dialog-centered modal-sm" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-dark text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white"><i className="fas fa-edit mr-2 text-white"></i> Edit Limit</h5>
+                  <button type="button" className="close text-white" onClick={() => setShowEditLimitModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body p-4">
+                  <div className="form-group">
+                    <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Requested Value</label>
+                    <input
+                      type="number"
+                      className="form-control text-center font-weight-bold text-primary"
+                      style={{ fontSize: '18px' }}
+                      value={editLimitValue}
+                      onChange={(e) => setEditLimitValue(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer bg-light border-top-0 justify-content-end p-3">
+                  <button type="button" className="btn btn-secondary px-4 btn-sm" onClick={() => setShowEditLimitModal(false)}>Cancel</button>
+                  <button type="button" className="btn btn-primary px-4 btn-sm" onClick={submitEditLimit}>Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* BOOTSTRAP MANAGER EDIT EXPENSE MODAL */}
+      {showEditExpenseModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1060 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1070 }} tabIndex={-1} role="dialog" onClick={() => setShowEditExpenseModal(false)}>
+            <div className="modal-dialog modal-lg modal-dialog-centered" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-primary text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white"><i className="fas fa-edit mr-2 text-white"></i> Edit Claim: {actionId}</h5>
+                  <button type="button" className="close text-white" onClick={() => setShowEditExpenseModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body p-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                  {editModalLoading ? (
+                    <div className="text-center p-5">
+                      <div className="spinner-border text-primary" role="status"></div>
+                      <p className="mt-2 font-weight-bold">Loading editor data...</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Summary fields */}
+                      <div className="row p-3 border rounded bg-light mb-4">
+                        <div className="col-md-3 form-group mb-2">
+                          <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>DA Amount</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            value={editFormValues.da_amount}
+                            onChange={(e) => {
+                              const nextForm = { ...editFormValues, da_amount: parseFloat(e.target.value) || 0 };
+                              nextForm.total_amount = recalculateEditTotal(nextForm);
+                              setEditFormValues(nextForm);
+                            }}
+                          />
+                        </div>
+                        <div className="col-md-3 form-group mb-2">
+                          <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Hotel Amount</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            value={editFormValues.hotel_amount}
+                            onChange={(e) => {
+                              const nextForm = { ...editFormValues, hotel_amount: parseFloat(e.target.value) || 0 };
+                              nextForm.total_amount = recalculateEditTotal(nextForm);
+                              setEditFormValues(nextForm);
+                            }}
+                          />
+                        </div>
+                        <div className="col-md-3 form-group mb-2">
+                          <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Other Amount</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            value={editFormValues.other_expense_amount}
+                            onChange={(e) => {
+                              const nextForm = { ...editFormValues, other_expense_amount: parseFloat(e.target.value) || 0 };
+                              nextForm.total_amount = recalculateEditTotal(nextForm);
+                              setEditFormValues(nextForm);
+                            }}
+                          />
+                        </div>
+                        <div className="col-md-3 form-group mb-2">
+                          <label className="font-weight-bold text-success text-uppercase" style={{ fontSize: '11px' }}>Total Amount</label>
+                          <input
+                            type="number"
+                            className="form-control font-weight-bold text-success"
+                            value={editFormValues.total_amount}
+                            readOnly
+                            style={{ background: '#e2f0d9' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Itineraries List */}
+                      <h6 className="font-weight-bold text-dark border-bottom pb-2 mb-3">Adjust Itinerary Legs</h6>
+                      <div className="d-flex flex-column" style={{ gap: '15px' }}>
+                        {editFormValues.legs.map((leg, idx) => {
+                          const isOutdoor = leg.travel_type === 'Outdoor';
+                          const legAllowedModes = ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'];
+                          const legFromList = getFacilityDropdownList(leg.from_district);
+                          const legToList = getFacilityDropdownList(leg.to_district);
+
+                          return (
+                            <div className="p-3 border rounded bg-white" key={leg.id} style={{ borderLeft: '4px solid #007bff !important' }}>
+                              <div className="d-flex justify-content-between mb-3 align-items-center">
+                                <h6 className="font-weight-bold text-primary mb-0">Leg {idx + 1}</h6>
+                                <div className="btn-group btn-group-toggle btn-group-sm">
+                                  <button type="button" className={`btn ${leg.travel_type === 'In-District' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => handleEditTravelTypeToggle(idx, 'In-District')}>In-District</button>
+                                  <button type="button" className={`btn ${leg.travel_type === 'Outdoor' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => handleEditTravelTypeToggle(idx, 'Outdoor')}>Outdoor</button>
+                                </div>
+                              </div>
+
+                              <div className="row">
+                                {isOutdoor && (
+                                  <div className="col-md-6 form-group mb-3">
+                                    <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>From District</label>
+                                    <select className="form-control" value={leg.from_district} onChange={(e) => updateEditLeg(idx, 'from_district', e.target.value)}>{getDistrictDropdowns()}</select>
+                                  </div>
+                                )}
+                                <div className="col-md-6 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>To District</label>
+                                  <select className="form-control" value={leg.to_district} disabled={!isOutdoor} onChange={(e) => updateEditLeg(idx, 'to_district', e.target.value)}>{getDistrictDropdowns()}</select>
+                                </div>
+                                <div className="col-md-6 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>From Location</label>
+                                  <input type="text" className="form-control" placeholder="From station/hospital..." list={`edit_list_from_${idx}`} value={leg.from_location} onChange={(e) => updateEditLeg(idx, 'from_location', e.target.value)} />
+                                  <datalist id={`edit_list_from_${idx}`}>{legFromList.map(f => <option key={f} value={f} />)}</datalist>
+                                </div>
+                                <div className="col-md-6 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>To Location</label>
+                                  <input type="text" className="form-control" placeholder="To station/hospital..." list={`edit_list_to_${idx}`} value={leg.to_location} onChange={(e) => updateEditLeg(idx, 'to_location', e.target.value)} />
+                                  <datalist id={`edit_list_to_${idx}`}>{legToList.map(t => <option key={t} value={t} />)}</datalist>
+                                </div>
+                                <div className="col-md-4 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Travel Mode</label>
+                                  <select className="form-control" value={leg.travel_mode} onChange={(e) => updateEditLeg(idx, 'travel_mode', e.target.value)}>
+                                    <option value="">Select Mode</option>
+                                    {legAllowedModes.map(m => <option key={m} value={m}>{m}</option>)}
+                                  </select>
+                                </div>
+                                <div className="col-md-4 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Distance (KM)</label>
+                                  <input type="number" className="form-control" readOnly={!['Bike', 'Car'].includes(leg.travel_mode)} value={leg.distance_km} onChange={(e) => updateEditLeg(idx, 'distance_km', parseFloat(e.target.value) || 0)} />
+                                </div>
+                                <div className="col-md-4 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Travel Amount</label>
+                                  <input type="number" className="form-control font-weight-bold text-primary" value={leg.travel_amount} onChange={(e) => updateEditLeg(idx, 'travel_amount', parseFloat(e.target.value) || 0)} />
+                                </div>
+                                <div className="col-md-6 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Sub Mode</label>
+                                  <input type="text" className="form-control" placeholder="e.g. Auto, Ferry" value={leg.sub_mode} onChange={(e) => updateEditLeg(idx, 'sub_mode', e.target.value)} />
+                                </div>
+                                <div className="col-md-6 form-group mb-3">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Sub Amount</label>
+                                  <input type="number" className="form-control font-weight-bold" value={leg.sub_amount} onChange={(e) => updateEditLeg(idx, 'sub_amount', parseFloat(e.target.value) || 0)} />
+                                </div>
+                                
+                                <div className="col-12 mt-2">
+                                  <small className="font-weight-bold text-secondary text-uppercase d-block mb-1" style={{ fontSize: '10px' }}>Work Summary (Calls & PMS)</small>
+                                  <div className="row text-center">
+                                    <div className="col-3 form-group"><label style={{ fontSize: '10px' }}>Assigned</label><input type="number" className="form-control form-control-sm" value={leg.ws_assigned} onChange={(e) => updateEditLeg(idx, 'ws_assigned', parseInt(e.target.value) || 0)} /></div>
+                                    <div className="col-3 form-group"><label style={{ fontSize: '10px' }}>Closed</label><input type="number" className="form-control form-control-sm" value={leg.ws_closed} onChange={(e) => updateEditLeg(idx, 'ws_closed', parseInt(e.target.value) || 0)} /></div>
+                                    <div className="col-3 form-group"><label style={{ fontSize: '10px' }}>PMS</label><input type="number" className="form-control form-control-sm" value={leg.ws_pms} onChange={(e) => updateEditLeg(idx, 'ws_pms', parseInt(e.target.value) || 0)} /></div>
+                                    <div className="col-3 form-group"><label style={{ fontSize: '10px' }}>Asset</label><input type="number" className="form-control form-control-sm" value={leg.ws_asset} onChange={(e) => updateEditLeg(idx, 'ws_asset', parseInt(e.target.value) || 0)} /></div>
+                                  </div>
+                                </div>
+                                <div className="col-12 form-group mt-2">
+                                  <label className="font-weight-bold text-secondary text-uppercase" style={{ fontSize: '11px' }}>Visit Purpose</label>
+                                  <input type="text" className="form-control" value={leg.visit_purpose} onChange={(e) => updateEditLeg(idx, 'visit_purpose', e.target.value)} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button type="button" className="btn btn-outline-primary w-100 mt-3 p-3 font-weight-bold" style={{ borderStyle: 'dashed' }} onClick={addNewEditLeg}>
+                        + Append Another Journey Leg
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer bg-light border-top-0 justify-content-end p-3">
+                  <button type="button" className="btn btn-secondary px-4 btn-sm" onClick={() => setShowEditExpenseModal(false)}>Cancel</button>
+                  <button type="button" className="btn btn-primary px-4 btn-sm" onClick={submitEditExpense}>Save Overrides</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* TOAST LIST */}
+      <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, pointerEvents: 'none' }}>
         {toasts.map((toast, idx) => {
-          let bg = 'var(--text)';
-          if (toast.type === 'success') bg = 'var(--success)';
-          if (toast.type === 'danger') bg = 'var(--danger)';
-          if (toast.type === 'warning') bg = 'var(--warning)';
+          let bg = 'bg-info text-white';
+          let icon = 'fas fa-info-circle';
+          if (toast.type === 'success') { bg = 'bg-success text-white'; icon = 'fas fa-check-circle'; }
+          if (toast.type === 'danger') { bg = 'bg-danger text-white'; icon = 'fas fa-exclamation-circle'; }
+          if (toast.type === 'warning') { bg = 'bg-warning text-dark'; icon = 'fas fa-exclamation-triangle'; }
 
           return (
-            <div
-              key={idx}
-              className="premium-toast"
-              style={{
-                borderLeft: `4px solid ${bg}`,
-                color: bg
-              }}
-            >
-              <span>
-                {toast.type === 'success' && '✅'}
-                {toast.type === 'danger' && '❌'}
-                {toast.type === 'warning' && '⚠️'}
-                {toast.type === 'info' && 'ℹ️'}
-              </span>
-              <span>{toast.msg}</span>
+            <div key={idx} className={`toast show border-0 shadow-lg ${bg} mb-2`} style={{ minWidth: '250px', borderRadius: '8px', pointerEvents: 'auto', opacity: 0.95 }}>
+              <div className="toast-body p-3 d-flex align-items-center">
+                <i className={`${icon} mr-2`} style={{ fontSize: '18px' }}></i>
+                <span className="font-weight-bold">{toast.msg}</span>
+              </div>
             </div>
           );
         })}
@@ -1421,6 +1333,6 @@ export default function Approval() {
         onClose={() => setShowSuccessPopup(false)}
         actionLabel="Done"
       />
-    </>
+    </div>
   );
 }

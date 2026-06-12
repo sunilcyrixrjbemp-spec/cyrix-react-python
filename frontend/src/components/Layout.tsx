@@ -2,85 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 
 const ICONS = {
-  dashboard: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="9" rx="2" />
-      <rect x="14" y="3" width="7" height="5" rx="1.5" />
-      <rect x="14" y="12" width="7" height="9" rx="2" />
-      <rect x="3" y="16" width="7" height="5" rx="1.5" />
-    </svg>
-  ),
-  admin: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <circle cx="12" cy="11" r="3" />
-      <path d="M12 8v1M12 13v1M9 11h1M14 11h1" />
-    </svg>
-  ),
-  approval: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" strokeDasharray="2 2" />
-      <path d="M9 12l2 2 4-4" strokeWidth="2" />
-    </svg>
-  ),
-  expense: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z" />
-      <path d="M8 8h8M8 12h8M8 16h5" />
-    </svg>
-  ),
-  report: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 3v18h18" />
-      <path d="M18.7 8l-5.1 5.2-2.8-2.7-4.8 4.8" />
-      <path d="M14 8h5v5" />
-    </svg>
-  ),
-  upload: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21.2 15c.5-1 .8-2.2.8-3.5 0-4.4-3.6-8-8-8C10 3.5 6.7 6.2 6 9.8 4 10.3 2.5 12 2.5 14c0 2.5 2 4.5 4.5 4.5h11.5" />
-      <path d="M16 12l-4-4-4 4M12 8v9" />
-    </svg>
-  ),
-  month: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-      <circle cx="8" cy="14" r="1" />
-      <circle cx="12" cy="14" r="1" />
-      <circle cx="16" cy="14" r="1" />
-      <circle cx="8" cy="18" r="1" />
-      <circle cx="12" cy="18" r="1" />
-      <circle cx="16" cy="18" r="1" />
-    </svg>
-  ),
-  profile: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="10" r="3" />
-      <path d="M7 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-    </svg>
-  ),
-  logout: (
-    <svg className="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  )
+  dashboard: 'fas fa-tachometer-alt',
+  admin: 'fas fa-user-shield',
+  approval: 'fas fa-check-circle',
+  expense: 'fas fa-receipt',
+  report: 'fas fa-chart-line',
+  upload: 'fas fa-cloud-upload-alt',
+  month: 'fas fa-calendar-alt',
+  profile: 'fas fa-user',
+  logout: 'fas fa-sign-out-alt'
 };
 
 const ALL_MENU_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard, colorCls: 'c-purple', path: '/home', roles: ['Admin', 'Superadmin', 'Manager', 'Engineer', 'Coordinator', 'Accounts', 'Divisional Manager', 'District Incharge'] },
-  { id: 'admin', label: 'Admin Panel', icon: ICONS.admin, colorCls: 'c-pink', path: '/admin', roles: ['Admin', 'Superadmin'] },
-  { id: 'approval', label: 'Approval Center', icon: ICONS.approval, colorCls: 'c-green', path: '/approval', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Divisional Manager'] },
-  { id: 'expense', label: 'Submit Claim', icon: ICONS.expense, colorCls: 'c-teal', path: '/expense', roles: ['Admin', 'Superadmin', 'Engineer'] },
-  { id: 'report', label: 'Analytics', icon: ICONS.report, colorCls: 'c-blue', path: '/dashboard', roles: ['Admin', 'Superadmin', 'Engineer', 'Manager', 'Coordinator', 'Divisional Manager', 'District Incharge'] },
-  { id: 'upload', label: 'Data Sync', icon: ICONS.upload, colorCls: 'c-orange', path: '/upload', roles: ['Admin', 'Superadmin'] },
-  { id: 'month', label: 'Month Summary', icon: ICONS.month, colorCls: 'c-red', path: '/month', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Accounts', 'Divisional Manager'] }
+  { id: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard, colorCls: 'text-primary', path: '/home', roles: ['Admin', 'Superadmin', 'Manager', 'Engineer', 'Coordinator', 'Accounts', 'Divisional Manager', 'District Incharge'] },
+  { id: 'admin', label: 'Admin Panel', icon: ICONS.admin, colorCls: 'text-danger', path: '/admin', roles: ['Admin', 'Superadmin'] },
+  { id: 'approval', label: 'Approval Center', icon: ICONS.approval, colorCls: 'text-success', path: '/approval', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Divisional Manager'] },
+  { id: 'expense', label: 'Submit Claim', icon: ICONS.expense, colorCls: 'text-info', path: '/expense', roles: ['Admin', 'Superadmin', 'Engineer'] },
+  { id: 'report', label: 'Analytics', icon: ICONS.report, colorCls: 'text-primary', path: '/dashboard', roles: ['Admin', 'Superadmin', 'Engineer', 'Manager', 'Coordinator', 'Divisional Manager', 'District Incharge'] },
+  { id: 'upload', label: 'Data Sync', icon: ICONS.upload, colorCls: 'text-warning', path: '/upload', roles: ['Admin', 'Superadmin'] },
+  { id: 'month', label: 'Month Summary', icon: ICONS.month, colorCls: 'text-info', path: '/month', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Accounts', 'Divisional Manager'] }
 ];
 
 export default function Layout() {
@@ -91,6 +31,7 @@ export default function Layout() {
   const [userId, setUserId] = useState('');
   const [allowedMenus, setAllowedMenus] = useState<string[]>([]);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -137,7 +78,6 @@ export default function Layout() {
 
   const confirmLogout = () => {
     localStorage.clear();
-    // Clear cookie
     document.cookie = "user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     navigate('/');
   };
@@ -149,110 +89,192 @@ export default function Layout() {
     return allowedMenus.includes(item.id.toLowerCase());
   });
 
-
-  // Determine current active page title for mobile topbar
   const currentItem = ALL_MENU_ITEMS.find(item => item.path === location.pathname);
   const mobileTitle = currentItem ? currentItem.label : (location.pathname === '/profile' ? 'My Profile' : 'Cyrix');
 
   return (
-    <div className="app-page">
-      {/* DESKTOP SIDEBAR */}
-      <div className="sidebar" id="desktopSidebar">
-        <div>
-          <div className="sidebar-logo">
-            <img src="/logo.png" alt="Cyrix" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            <div className="logo-text">
-              <h2>Cyrix Healthcare</h2>
-              <span>Field Analytics</span>
+    <div className={`wrapper ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapse'}`} style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      
+      {/* NAVBAR */}
+      <nav className="main-header navbar navbar-expand navbar-white navbar-light border-bottom" style={{ marginLeft: sidebarOpen ? '250px' : '0px', transition: 'margin-left .3s ease-in-out', zIndex: 1030 }}>
+        {/* Left navbar links */}
+        <ul className="navbar-nav">
+          <li className="nav-item">
+            <button className="nav-link btn btn-link" onClick={() => setSidebarOpen(!sidebarOpen)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+              <i className="fas fa-bars"></i>
+            </button>
+          </li>
+          <li className="nav-item d-none d-sm-inline-block">
+            <span className="nav-link font-weight-bold text-dark">{mobileTitle}</span>
+          </li>
+        </ul>
+
+        {/* Right navbar links */}
+        <ul className="navbar-nav ml-auto align-items-center">
+          <li className="nav-item mr-3">
+            <span className="font-weight-bold text-secondary" style={{ fontSize: '14px' }}>
+              <i className="fas fa-user-circle mr-1"></i> {displayName} ({userRole})
+            </span>
+          </li>
+          <li className="nav-item">
+            <button className="btn btn-outline-danger btn-sm" onClick={handleLogout}>
+              <i className="fas fa-sign-out-alt"></i> Logout
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      {/* MAIN SIDEBAR CONTAINER */}
+      <aside className="main-sidebar sidebar-dark-primary elevation-4" style={{
+        position: 'fixed',
+        top: 0,
+        bottom: 0,
+        left: 0,
+        width: '250px',
+        zIndex: 1040,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-250px)',
+        transition: 'transform .3s ease-in-out'
+      }}>
+        {/* Brand Logo */}
+        <div className="brand-link d-flex align-items-center" style={{ borderBottom: '1px solid #4f5962', padding: '15px' }}>
+          <img src="/logo.png" alt="Cyrix Logo" className="brand-image img-circle elevation-3" style={{ opacity: '.8', maxHeight: '33px', float: 'none' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <span className="brand-text font-weight-bold text-white pl-2" style={{ fontSize: '18px' }}>Cyrix Healthcare</span>
+        </div>
+
+        {/* Sidebar */}
+        <div className="sidebar" style={{ height: 'calc(100vh - 65px)', overflowY: 'auto' }}>
+          {/* User panel */}
+          <div className="user-panel mt-3 pb-3 mb-3 d-flex align-items-center" style={{ borderBottom: '1px solid #4f5962' }}>
+            <div className="image text-white" style={{ fontSize: '24px', paddingLeft: '15px' }}>
+              <i className="fas fa-user-cog"></i>
+            </div>
+            <div className="info pl-3">
+              <span className="d-block text-white font-weight-bold" style={{ fontSize: '14px' }}>{displayName}</span>
+              <span className="text-muted" style={{ fontSize: '11px' }}>{userRole}</span>
             </div>
           </div>
-          <div className="nav-section">
-            <div className="nav-section-label">Main Menu</div>
-            <ul className="nav-list" id="sidebarNav">
+
+          {/* Sidebar Menu */}
+          <nav className="mt-2">
+            <ul className="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
               {activeItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
-                  <li key={item.id}>
-                    <Link to={item.path} className={`nav-link-item ${isActive ? 'active' : ''}`}>
-                      <div className="nav-icon-wrap">{item.icon}</div> {item.label}
+                  <li className="nav-item" key={item.id} style={{ width: '100%' }}>
+                    <Link to={item.path} className={`nav-link ${isActive ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', margin: '2px 0' }}>
+                      <i className={`nav-icon ${item.icon}`} style={{ width: '24px', textAlign: 'center' }}></i>
+                      <p style={{ margin: '0 0 0 10px' }}>{item.label}</p>
                     </Link>
                   </li>
                 );
               })}
+              <li className="nav-item mt-4" style={{ width: '100%' }}>
+                <Link to="/profile" className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center' }}>
+                  <i className="nav-icon fas fa-user-circle" style={{ width: '24px', textAlign: 'center' }}></i>
+                  <p style={{ margin: '0 0 0 10px' }}>My Profile</p>
+                </Link>
+              </li>
             </ul>
-          </div>
+          </nav>
         </div>
-        <div className="sidebar-bottom">
-          <ul className="nav-list" id="desktopSidebarBottom">
-            <li>
-              <Link to="/profile" className={`nav-link-item ${location.pathname === '/profile' ? 'active' : ''}`}>
-                <div className="nav-icon-wrap">{ICONS.profile}</div> My Profile
-              </Link>
-            </li>
-            <li>
-              <a href="#" className="nav-link-item nav-logout" onClick={handleLogout}>
-                <div className="nav-icon-wrap">{ICONS.logout}</div> Logout
-              </a>
-            </li>
-          </ul>
+      </aside>
+
+      {/* CONTENT WRAPPER */}
+      <div className="content-wrapper" style={{
+        marginLeft: sidebarOpen ? '250px' : '0px',
+        transition: 'margin-left .3s ease-in-out',
+        padding: '20px',
+        flex: 1,
+        backgroundColor: '#f4f6f9',
+        paddingBottom: '80px' // spacing for mobile bottom-nav
+      }}>
+        <div className="container-fluid">
+          <Outlet />
         </div>
       </div>
 
-      {/* MAIN CONTENT OUTLET */}
-      <div className="main-content" id="mainContainer">
-        {/* Mobile Topbar */}
-        <div className="mobile-topbar hide-desktop">
-          <div className="mobile-topbar-left">
-            <h1>{mobileTitle}</h1>
-          </div>
-          <img src="/logo.png" alt="Cyrix Logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-        </div>
-
-        <Outlet />
-      </div>
-
-      {/* Mobile Bottom Nav */}
-      <nav className="bottom-nav" id="bottom-nav">
-        {activeItems.map((item) => {
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <div className="mobile-bottom-nav d-md-none border-top bg-white" style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '65px',
+        zIndex: 1030,
+        display: 'flex',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
+      }}>
+        {activeItems.slice(0, 4).map((item) => {
           const isActive = location.pathname === item.path;
           return (
-            <Link
-              key={item.id}
-              to={item.path}
-              className={`bn-item ${isActive ? 'active' : ''}`}
-            >
-              <div className="bn-icon-wrap">{item.icon}</div>
-              <span className="bn-label">{item.label}</span>
+            <Link key={item.id} to={item.path} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textDecoration: 'none',
+              color: isActive ? 'var(--primary)' : '#6c757d',
+              fontSize: '11px',
+              fontWeight: 600
+            }}>
+              <i className={item.icon} style={{ fontSize: '18px', marginBottom: '4px' }}></i>
+              <span>{item.id === 'dashboard' ? 'Home' : item.label.split(' ')[0]}</span>
             </Link>
           );
         })}
-        <Link to="/profile" className={`bn-item ${location.pathname === '/profile' ? 'active' : ''}`}>
-          <div className="bn-icon-wrap">{ICONS.profile}</div>
-          <span className="bn-label">Profile</span>
+        <Link to="/profile" style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textDecoration: 'none',
+          color: location.pathname === '/profile' ? 'var(--primary)' : '#6c757d',
+          fontSize: '11px',
+          fontWeight: 600
+        }}>
+          <i className="fas fa-user-circle" style={{ fontSize: '18px', marginBottom: '4px' }}></i>
+          <span>Profile</span>
         </Link>
-        <a href="#" className="bn-item" onClick={handleLogout}>
-          <div className="bn-icon-wrap">{ICONS.logout}</div>
-          <span className="bn-label">Logout</span>
-        </a>
-      </nav>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {!sidebarOpen && (
+        <div className="sidebar-overlay d-md-none" onClick={() => setSidebarOpen(true)} style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          zIndex: 1025
+        }}></div>
+      )}
 
       {/* Logout Modal */}
       {showLogoutModal && (
         <>
-          <div className="popup-overlay" style={{ display: 'block' }} onClick={() => setShowLogoutModal(false)}></div>
-          <div className="custom-popup" style={{ display: 'block' }}>
-            <div className="icon-wrapper error">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
-              </svg>
-            </div>
-            <h3 style={{ color: 'var(--primary-dark)', fontSize: '18px', marginBottom: '8px', fontWeight: 800 }}>Log Out</h3>
-            <p style={{ color: 'var(--text-2)', fontSize: '14px', marginBottom: '24px', fontWeight: 500 }}>Are you sure you want to securely log out?</p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button className="btn-ghost" onClick={() => setShowLogoutModal(false)} style={{ flex: 1 }}>Cancel</button>
-              <button className="btn-primary" onClick={confirmLogout} style={{ margin: 0, background: 'var(--danger)', flex: 1, justifyContent: 'center' }}>Logout</button>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1050 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1060 }} tabIndex={-1} role="dialog">
+            <div className="modal-dialog modal-dialog-centered" role="document">
+              <div className="modal-content">
+                <div className="modal-header bg-danger text-white">
+                  <h5 className="modal-title font-weight-bold">
+                    <i className="fas fa-exclamation-triangle mr-2"></i> Log Out
+                  </h5>
+                  <button type="button" className="close text-white" onClick={() => setShowLogoutModal(false)} aria-label="Close" style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body text-center p-4">
+                  <i className="fas fa-sign-out-alt text-danger mb-3" style={{ fontSize: '48px' }}></i>
+                  <h5 className="font-weight-bold">Are you sure you want to log out?</h5>
+                  <p className="text-muted">You will need to enter your credentials again to login.</p>
+                </div>
+                <div className="modal-footer justify-content-center">
+                  <button className="btn btn-secondary px-4 mr-2" onClick={() => setShowLogoutModal(false)}>Cancel</button>
+                  <button className="btn btn-danger px-4" onClick={confirmLogout}>Logout</button>
+                </div>
+              </div>
             </div>
           </div>
         </>
