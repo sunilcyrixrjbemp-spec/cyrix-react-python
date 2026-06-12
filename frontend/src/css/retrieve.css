@@ -115,7 +115,7 @@ body {
 
 /* ─── OTP Area ───────────────────────────────── */
 .otp-area {
-  display: none;
+  display: block;
   margin-top: 18px;
   padding: 22px;
   background: #f0f7ff;
@@ -123,6 +123,7 @@ body {
   border: 1.5px dashed rgba(0,113,227,0.3);
   animation: fadeIn 0.4s ease;
 }
+
 
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.97); }
