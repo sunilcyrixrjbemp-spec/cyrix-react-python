@@ -116,6 +116,63 @@ function deriveActionLevel(expense: any) {
   return null;
 }
 
+async function runAutoRejections(env: Env) {
+  const kolkataDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const currentDay = kolkataDate.getDate();
+  const currentYear = kolkataDate.getFullYear();
+  const currentMonth = kolkataDate.getMonth();
+  const currentHour = kolkataDate.getHours();
+  const currentMinute = kolkataDate.getMinutes();
+
+  // 5th of the month at 11:55 PM (23:55)
+  const isPastDeadline = currentDay > 5 || (currentDay === 5 && (currentHour > 23 || (currentHour === 23 && currentMinute >= 55)));
+  if (!isPastDeadline) return;
+
+  // Find all claims that are still L1/L2 pending
+  const pending: any = await env.DB.prepare(`
+    SELECT m.exp_id, m.user_id, m.expense_date, m.status, m.level_first_approver, m.level_second_approver,
+           (SELECT full_name FROM user WHERE user_id = m.level_first_approver) as l1_name,
+           (SELECT full_name FROM user WHERE user_id = m.level_second_approver) as l2_name,
+           u.full_name as submitter_name
+    FROM expense_master m
+    JOIN user u ON m.user_id = u.user_id
+    WHERE m.status IN ('Pending L1', 'Pending', 'Pending L2')
+  `).all().catch(() => ({ results: [] }));
+
+  const claims = pending.results || [];
+  for (const c of claims) {
+    const expDateObj = new Date(c.expense_date);
+    const expYear = expDateObj.getFullYear();
+    const expMonth = expDateObj.getMonth();
+
+    const isPrevMonth = expYear < currentYear || (expYear === currentYear && expMonth < currentMonth);
+    if (isPrevMonth) {
+      const pendingManager = c.status === "Pending L2" ? (c.l2_name || c.level_second_approver) : (c.l1_name || c.level_first_approver);
+      const managerId = c.status === "Pending L2" ? c.level_second_approver : c.level_first_approver;
+      const managerName = pendingManager || "Manager";
+
+      const rejectMsg = `Auto Rejected: Claim was pending approval from ${managerName} and monthly deadline (5th of the month, 11:55 PM) has expired.`;
+      
+      await env.DB.prepare(`
+        UPDATE expense_master 
+        SET status = 'Rejected', reject_reason = ?, approved_by = 'System' 
+        WHERE exp_id = ?
+      `).bind(rejectMsg, c.exp_id).run();
+
+      // Notifications
+      const userMsg = `Your expense claim ${c.exp_id} has been Auto Rejected because L1/L2 manager ${managerName} did not approve it before the deadline of the 5th of the month.`;
+      await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+        .bind(c.user_id, userMsg).run();
+
+      if (managerId && managerId !== 'None') {
+        const mgrMsg = `Expense claim ${c.exp_id} submitted by ${c.submitter_name} has been Auto Rejected due to approval deadline expiration (5th of the month, 11:55 PM).`;
+        await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+          .bind(managerId, mgrMsg).run();
+      }
+    }
+  }
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -125,6 +182,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   if (method === "OPTIONS") {
     return new Response(null, { headers });
+  }
+
+  // Trigger auto-rejections check globally
+  try {
+    await runAutoRejections(env);
+  } catch (err) {
+    console.error("Auto rejections check failed: ", err);
   }
 
   try {
@@ -195,13 +259,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         return new Response(JSON.stringify({ success: false, message: "Access Denied: Only managers/approvers can access." }), { status: 403, headers });
       }
 
-      const currentMonth = new Date().toISOString().slice(0, 7);
+      const monthParam = url.searchParams.get("month") || "";
+      const currentMonth = (monthParam && monthParam.length >= 7) ? monthParam.slice(0, 7) : new Date().toISOString().slice(0, 7);
 
       const expQuery = `
         SELECT m.exp_id, m.user_id, m.expense_date, m.total_amount, m.status,
                m.da_amount, m.hotel_amount, m.other_expense_amount,
                m.level_first_approver, m.level_second_approver,
                m.approved_by, m.reject_reason, m.created_at as submitted_at,
+               m.is_edited, m.original_amount, m.manager_edit_remark,
                u.full_name, u.e_code, u.grade, u.district_name,
                (SELECT GROUP_CONCAT(DISTINCT i.to_district) FROM expense_itinerary i WHERE i.exp_id = m.exp_id) as district
         FROM expense_master m 
@@ -255,7 +321,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           can_action: canAction, 
           action_level: actionLevel,
           submitted_at: e.submitted_at,
-          sort_date: e.submitted_at
+          sort_date: e.submitted_at,
+          is_edited: e.is_edited || 0,
+          original_amount: e.original_amount,
+          manager_edit_remark: e.manager_edit_remark
         });
       }
 
@@ -327,7 +396,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const isL2 = exp.level_second_approver === userId;
         const l2CannotSee = isL2 && (exp.status === 'Pending L1' || exp.status === 'Pending') && !isL1;
 
-        if ((!isL1 && !isL2) || l2CannotSee) {
+        // Admin, HOD or coordinators can view too
+        const requesterInfo = await getApproverInfo(env, userId, id);
+        const hasAccess = isL1 || isL2 || (requesterInfo && (requesterInfo.isAdmin || requesterInfo.role === 'Coordinator' || requesterInfo.role === 'Divisional Manager'));
+
+        if (!hasAccess || l2CannotSee) {
           return new Response(JSON.stringify({ success: false, message: "Access Denied." }), { status: 403, headers });
         }
 
@@ -406,6 +479,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         if (req.status.toLowerCase() !== 'pending') return new Response(JSON.stringify({ success: false, message: "Already processed." }), { status: 400, headers });
 
         await env.DB.prepare("UPDATE limit_approval_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(action, reqId).run();
+        
+        // Notification for limit action
+        const msg = `Your limit extension request (ID: ${expId}) has been ${action.toLowerCase()} by your manager.`;
+        await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)").bind(req.user_id, msg).run();
+
         return new Response(JSON.stringify({ success: true, message: `Limit extension successfully ${action.toLowerCase()}.` }), { status: 200, headers });
       } else {
         const exp: any = await env.DB.prepare("SELECT * FROM expense_master WHERE exp_id = ?").bind(expId).first();
@@ -416,16 +494,55 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return new Response(JSON.stringify({ success: false, message: `This expense is already ${currentStatus}.` }), { status: 409, headers });
         }
 
+        // Verify monthly approval deadline (5th day check)
+        const kolkataDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const currentDay = kolkataDate.getDate();
+        const currentYear = kolkataDate.getFullYear();
+        const currentMonth = kolkataDate.getMonth();
+        const currentHour = kolkataDate.getHours();
+        const currentMinute = kolkataDate.getMinutes();
+
+        const expDateObj = new Date(exp.expense_date);
+        const expYear = expDateObj.getFullYear();
+        const expMonth = expDateObj.getMonth();
+
+        const isPrevMonth = expYear < currentYear || (expYear === currentYear && expMonth < currentMonth);
+        const isPastDeadline = currentDay > 5 || (currentDay === 5 && (currentHour > 23 || (currentHour === 23 && currentMinute >= 55)));
+
+        if (isPrevMonth && isPastDeadline) {
+          return new Response(JSON.stringify({
+            success: false,
+            message: "Action Locked: Approval deadline for the previous month's expenses has expired (5th of the month, 11:55 PM)."
+          }), { status: 400, headers });
+        }
+
         if (currentStatus === "Pending L1" || currentStatus === "Pending") {
           if (exp.level_first_approver !== userId) return new Response(JSON.stringify({ success: false, message: "Access Denied." }), { status: 403, headers });
           
           if (action === "Rejected") {
             if (!reason.trim()) return new Response(JSON.stringify({ success: false, message: "Reason required." }), { status: 400, headers });
             await env.DB.prepare("UPDATE expense_master SET status = 'Rejected', reject_reason = ?, approved_by = ?, level_first_approver_time = CURRENT_TIMESTAMP WHERE exp_id = ?").bind(reason, userId, expId).run();
+            
+            // Notify User
+            await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+              .bind(exp.user_id, `Your expense claim ${expId} has been rejected at Level 1. Reason: ${reason}`).run();
+
             return new Response(JSON.stringify({ success: true, message: "Expense rejected at Level 1." }), { status: 200, headers });
           } else {
             const newStatus = (!isMissing(exp.level_second_approver) && exp.level_second_approver !== 'None') ? "Pending L2" : "Approved";
             await env.DB.prepare("UPDATE expense_master SET status = ?, approved_by = ?, level_first_approver_time = CURRENT_TIMESTAMP WHERE exp_id = ?").bind(newStatus, userId, expId).run();
+            
+            // Notify User & L2 Manager
+            if (newStatus === "Pending L2") {
+              await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+                .bind(exp.user_id, `Your expense claim ${expId} has been approved at Level 1 and is pending L2 approval.`).run();
+              await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+                .bind(exp.level_second_approver, `New expense claim ${expId} is pending your L2 approval.`).run();
+            } else {
+              await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+                .bind(exp.user_id, `Your expense claim ${expId} has been fully approved.`).run();
+            }
+
             return new Response(JSON.stringify({ success: true, message: "Approved." }), { status: 200, headers });
           }
         } 
@@ -435,12 +552,167 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           if (action === "Rejected") {
             if (!reason.trim()) return new Response(JSON.stringify({ success: false, message: "Reason required." }), { status: 400, headers });
             await env.DB.prepare("UPDATE expense_master SET status = 'Rejected', reject_reason = ?, approved_by = ?, level_second_approver_time = CURRENT_TIMESTAMP WHERE exp_id = ?").bind(reason, userId, expId).run();
+            
+            // Notify User
+            await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+              .bind(exp.user_id, `Your expense claim ${expId} has been rejected at Level 2. Reason: ${reason}`).run();
+
             return new Response(JSON.stringify({ success: true, message: "Expense rejected at Level 2." }), { status: 200, headers });
           } else {
             await env.DB.prepare("UPDATE expense_master SET status = 'Approved', approved_by = ?, level_second_approver_time = CURRENT_TIMESTAMP WHERE exp_id = ?").bind(userId, expId).run();
+            
+            // Notify User
+            await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+              .bind(exp.user_id, `Your expense claim ${expId} has been fully approved.`).run();
+
             return new Response(JSON.stringify({ success: true, message: "Expense fully approved." }), { status: 200, headers });
           }
         }
+      }
+    }
+
+    /* ── POST /api/approval/edit ── */
+    if (path === "/api/approval/edit" && method === "POST") {
+      const body: any = await request.json();
+      const userId = await resolveLoggedInUserId(request, url, body);
+      if (!userId) return new Response(JSON.stringify({ success: false, message: "Unauthorized" }), { status: 401, headers });
+
+      const { exp_id, type } = body;
+      if (!exp_id || !type) {
+        return new Response(JSON.stringify({ success: false, message: "Missing required edit fields." }), { status: 400, headers });
+      }
+
+      if (type === 'Limit') {
+        const requested_value = parseFloat(body.requested_value);
+        if (isNaN(requested_value)) {
+          return new Response(JSON.stringify({ success: false, message: "Invalid limit amount." }), { status: 400, headers });
+        }
+        const reqId = exp_id.replace('REQ-', '');
+        const req: any = await env.DB.prepare("SELECT * FROM limit_approval_requests WHERE id = ?").bind(reqId).first();
+        if (!req) return new Response(JSON.stringify({ success: false, message: "Limit request not found." }), { status: 404, headers });
+
+        await env.DB.prepare("UPDATE limit_approval_requests SET requested_value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .bind(requested_value, reqId).run();
+
+        // Notify user of limit override
+        await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+          .bind(req.user_id, `Your limit extension request (ID: REQ-${reqId}) value has been overridden by manager to ₹${requested_value}.`).run();
+
+        return new Response(JSON.stringify({ success: true, message: "Limit extension overridden successfully." }), { status: 200, headers });
+      }
+
+      if (type === 'Expense') {
+        const { da_amount, hotel_amount, other_expense_amount, total_amount, legs, remark } = body;
+        if (!remark || !remark.trim()) {
+          return new Response(JSON.stringify({ success: false, message: "Remark is required for manager overrides." }), { status: 400, headers });
+        }
+
+        const exp: any = await env.DB.prepare("SELECT * FROM expense_master WHERE exp_id = ?").bind(exp_id).first();
+        if (!exp) return new Response(JSON.stringify({ success: false, message: "Expense claim not found." }), { status: 404, headers });
+
+        // Save original details to database before first edit
+        if (exp.is_edited === 0 || !exp.original_amount) {
+          const { results: currentItineraries }: any = await env.DB.prepare(
+            "SELECT * FROM expense_itinerary WHERE exp_id = ? ORDER BY leg_number ASC"
+          ).bind(exp_id).all().catch(() => ({ results: [] }));
+
+          const originalDetailsJson = JSON.stringify(currentItineraries || []);
+          const originalAmt = exp.total_amount;
+
+          await env.DB.prepare(`
+            UPDATE expense_master 
+            SET original_amount = ?, original_details = ? 
+            WHERE exp_id = ?
+          `).bind(originalAmt, originalDetailsJson, exp_id).run();
+        }
+
+        // Update expense_master amounts
+        await env.DB.prepare(`
+          UPDATE expense_master 
+          SET da_amount = ?, hotel_amount = ?, other_expense_amount = ?, total_amount = ?, 
+              is_edited = 1, manager_edit_remark = ? 
+          WHERE exp_id = ?
+        `).bind(da_amount, hotel_amount, other_expense_amount, total_amount, remark, exp_id).run();
+
+        // Update or insert itineraries
+        const keptItineraryIds: string[] = [];
+        for (const leg of (legs || [])) {
+          const isNew = !leg.id || String(leg.id).startsWith("new_");
+          const legNum = leg.leg_number;
+          const legId = isNew ? `${exp_id}-${legNum}` : leg.id;
+          keptItineraryIds.push(legId);
+
+          const fromDist = leg.from_district;
+          const toDist = leg.to_district;
+          const fromLoc = leg.from_location;
+          const toLoc = leg.to_location;
+          const mode = leg.travel_mode;
+          const km = parseFloat(leg.distance_km) || 0;
+          const amt = parseFloat(leg.travel_amount) || 0;
+          const subMode = leg.sub_mode || null;
+          const subAmt = parseFloat(leg.sub_amount) || 0;
+          const da = parseFloat(leg.da_amount) || 0;
+          const hotel = parseFloat(leg.hotel_amount) || 0;
+          const otherDesc = leg.other_desc || null;
+          const otherAmt = parseFloat(leg.other_amount) || 0;
+          const assigned = parseInt(leg.ws_assigned) || 0;
+          const completed = parseInt(leg.ws_closed) || 0;
+          const pms = parseInt(leg.ws_pms) || 0;
+          const asset = parseInt(leg.ws_asset) || 0;
+          const purpose = leg.visit_purpose || null;
+
+          if (isNew) {
+            await env.DB.prepare(`
+              INSERT INTO expense_itinerary (
+                itinerary_id, exp_id, leg_number,
+                from_district, to_district, from_location, to_location,
+                travel_mode, distance_km, travel_amount,
+                sub_mode, sub_amount, da_amount, hotel_amount,
+                other_desc, other_amount, calls_assigned, calls_completed, pms_count, asset_tagging,
+                visit_purpose
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              legId, exp_id, legNum,
+              fromDist, toDist, fromLoc, toLoc,
+              mode, km, amt,
+              subMode, subAmt, da, hotel,
+              otherDesc, otherAmt, assigned, completed, pms, asset,
+              purpose
+            ).run();
+          } else {
+            await env.DB.prepare(`
+              UPDATE expense_itinerary SET 
+                leg_number = ?, from_district = ?, to_district = ?, from_location = ?, to_location = ?,
+                travel_mode = ?, distance_km = ?, travel_amount = ?,
+                sub_mode = ?, sub_amount = ?, da_amount = ?, hotel_amount = ?,
+                other_desc = ?, other_amount = ?, calls_assigned = ?, calls_completed = ?, pms_count = ?, asset_tagging = ?,
+                visit_purpose = ?
+              WHERE itinerary_id = ?
+            `).bind(
+              legNum, fromDist, toDist, fromLoc, toLoc,
+              mode, km, amt,
+              subMode, subAmt, da, hotel,
+              otherDesc, otherAmt, assigned, completed, pms, asset,
+              purpose, legId
+            ).run();
+          }
+        }
+
+        // Delete deleted legs from database
+        if (keptItineraryIds.length > 0) {
+          const placeholders = keptItineraryIds.map(() => "?").join(",");
+          await env.DB.prepare(`
+            DELETE FROM expense_itinerary 
+            WHERE exp_id = ? AND itinerary_id NOT IN (${placeholders})
+          `).bind(exp_id, ...keptItineraryIds).run();
+        }
+
+        // Add Notification for User
+        const userNotifyMsg = `Your expense claim ${exp_id} details have been modified by a manager. Remarks: ${remark}.`;
+        await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)")
+          .bind(exp.user_id, userNotifyMsg).run();
+
+        return new Response(JSON.stringify({ success: true, message: "Expense overrides saved successfully." }), { status: 200, headers });
       }
     }
 

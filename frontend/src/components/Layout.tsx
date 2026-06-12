@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+// Import all sub-pages for state-based routing
+import Home from '../pages/Home';
+import Admin from '../pages/Admin';
+import Approval from '../pages/Approval';
+import Expense from '../pages/Expense';
+import Month from '../pages/Month';
+import Dashboard from '../pages/Dashboard';
+import Upload from '../pages/Upload';
+import Profile from '../pages/Profile';
+import HelpCenter from '../pages/HelpCenter';
 
 const ICONS = {
   dashboard: 'fas fa-tachometer-alt',
@@ -14,18 +25,24 @@ const ICONS = {
 };
 
 const ALL_MENU_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard, colorCls: 'text-primary', path: '/home', roles: ['Admin', 'Superadmin', 'Manager', 'Engineer', 'Coordinator', 'Accounts', 'Divisional Manager', 'District Incharge'] },
-  { id: 'admin', label: 'Admin Panel', icon: ICONS.admin, colorCls: 'text-danger', path: '/admin', roles: ['Admin', 'Superadmin'] },
-  { id: 'approval', label: 'Approval Center', icon: ICONS.approval, colorCls: 'text-success', path: '/approval', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Divisional Manager'] },
-  { id: 'expense', label: 'Submit Claim', icon: ICONS.expense, colorCls: 'text-info', path: '/expense', roles: ['Admin', 'Superadmin', 'Engineer'] },
-  { id: 'report', label: 'Analytics', icon: ICONS.report, colorCls: 'text-primary', path: '/dashboard', roles: ['Admin', 'Superadmin', 'Engineer', 'Manager', 'Coordinator', 'Divisional Manager', 'District Incharge'] },
-  { id: 'upload', label: 'Data Sync', icon: ICONS.upload, colorCls: 'text-warning', path: '/upload', roles: ['Admin', 'Superadmin'] },
-  { id: 'month', label: 'Month Summary', icon: ICONS.month, colorCls: 'text-info', path: '/month', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Accounts', 'Divisional Manager'] }
+  { id: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard, colorCls: 'text-primary', roles: ['Admin', 'Superadmin', 'Manager', 'Engineer', 'Coordinator', 'Accounts', 'Divisional Manager', 'District Incharge'] },
+  { id: 'admin', label: 'Admin Panel', icon: ICONS.admin, colorCls: 'text-danger', roles: ['Admin', 'Superadmin'] },
+  { id: 'approval', label: 'Approval Center', icon: ICONS.approval, colorCls: 'text-success', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Divisional Manager'] },
+  { id: 'expense', label: 'Submit Claim', icon: ICONS.expense, colorCls: 'text-info', roles: ['Admin', 'Superadmin', 'Engineer'] },
+  { id: 'report', label: 'Analytics', icon: ICONS.report, colorCls: 'text-primary', roles: ['Admin', 'Superadmin', 'Engineer', 'Manager', 'Coordinator', 'Divisional Manager', 'District Incharge'] },
+  { id: 'upload', label: 'Data Sync', icon: ICONS.upload, colorCls: 'text-warning', roles: ['Admin', 'Superadmin'] },
+  { id: 'month', label: 'Month Summary', icon: ICONS.month, colorCls: 'text-info', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Accounts', 'Divisional Manager'] },
+  { id: 'help', label: 'Help Center', icon: 'fas fa-question-circle', colorCls: 'text-warning', roles: ['Admin', 'Superadmin', 'Manager', 'Engineer', 'Coordinator', 'Accounts', 'Divisional Manager', 'District Incharge'] }
 ];
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return sessionStorage.getItem('activeTab') || 'dashboard';
+  });
+  
   const [displayName, setDisplayName] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userId, setUserId] = useState('');
@@ -33,6 +50,10 @@ export default function Layout() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -47,7 +68,7 @@ export default function Layout() {
     if (isMobile) {
       setSidebarOpen(false);
     }
-  }, [location.pathname, isMobile]);
+  }, [activeTab, isMobile]);
 
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -67,25 +88,68 @@ export default function Layout() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!userRole || !userId || allowedMenus.length === 0) return;
+    if (!userId) return;
+    const syncPermissions = async () => {
+      try {
+        const res = await fetch(`/api/profile?user_id=${userId}`);
+        const data = await res.json();
+        if (data.success && data.profile) {
+          const freshMenus = data.profile.allowed_menus || 'dashboard,expense,profile';
+          localStorage.setItem('allowed_menus', freshMenus);
+          setAllowedMenus(freshMenus.split(',').map((m: string) => m.trim().toLowerCase()));
+          
+          if (data.profile.full_name) {
+            localStorage.setItem('display_name', data.profile.full_name);
+            setDisplayName(data.profile.full_name);
+          }
+          if (data.profile.role) {
+            localStorage.setItem('user_role', data.profile.role);
+            setUserRole(data.profile.role);
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing dynamic page permissions:', err);
+      }
+    };
+    syncPermissions();
+  }, [userId]);
 
-    const path = location.pathname;
-
-    // Home (dashboard), Expense, and Profile are always allowed
-    if (path === '/home' || path === '/profile' || path === '/expense') {
-      return;
+  const loadNotifications = async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/notifications?user_id=${userId}`);
+      const data = await res.json();
+      if (data.success) {
+        setNotifications(data.notifications || []);
+      }
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
     }
+  };
 
-    const item = ALL_MENU_ITEMS.find(m => m.path === path);
-    if (!item) return;
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000); // poll every 30s
+    return () => clearInterval(interval);
+  }, [userId]);
 
-    const isRoleAllowed = item.roles.includes(userRole);
-    const isMenuAllowed = userRole === 'Admin' || userRole === 'Superadmin' || allowedMenus.includes(item.id.toLowerCase());
-
-    if (!isRoleAllowed || !isMenuAllowed) {
-      navigate('/home');
+  const clearNotifications = async () => {
+    try {
+      const res = await fetch('/api/notifications/clear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNotifications([]);
+      }
+    } catch (err) {
+      console.error('Failed to clear notifications:', err);
     }
-  }, [location.pathname, userRole, userId, allowedMenus, navigate]);
+  };
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -94,19 +158,52 @@ export default function Layout() {
 
   const confirmLogout = () => {
     localStorage.clear();
+    sessionStorage.clear();
     document.cookie = "user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     navigate('/');
+  };
+
+  const changeTab = (tabId: string) => {
+    setActiveTab(tabId);
+    sessionStorage.setItem('activeTab', tabId);
   };
 
   const activeItems = ALL_MENU_ITEMS.filter(item => {
     if (!item.roles.includes(userRole)) return false;
     if (userRole === 'Admin' || userRole === 'Superadmin') return true;
-    if (item.id === 'dashboard' || item.id === 'expense') return true;
+    if (item.id === 'dashboard' || item.id === 'expense' || item.id === 'help') return true;
     return allowedMenus.includes(item.id.toLowerCase());
   });
 
-  const currentItem = ALL_MENU_ITEMS.find(item => item.path === location.pathname);
-  const mobileTitle = currentItem ? currentItem.label : (location.pathname === '/profile' ? 'My Profile' : 'Cyrix');
+  const currentItem = ALL_MENU_ITEMS.find(item => item.id === activeTab);
+  const pageTitle = currentItem ? currentItem.label : (activeTab === 'profile' ? 'My Profile' : 'Cyrix');
+
+  // Render active page component directly for URL obscurity
+  const renderPageContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <Home setActiveTab={changeTab} />;
+      case 'admin':
+        return <Admin />;
+      case 'approval':
+        return <Approval />;
+      case 'expense':
+        return <Expense />;
+      case 'month':
+        return <Month />;
+      case 'report':
+        return <Dashboard />;
+      case 'upload':
+        return <Upload />;
+      case 'profile':
+        return <Profile />;
+      case 'allowed_menus': // fallback
+      case 'help':
+        return <HelpCenter />;
+      default:
+        return <Home setActiveTab={changeTab} />;
+    }
+  };
 
   return (
     <div className={`wrapper ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapse'}`} style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -119,26 +216,41 @@ export default function Layout() {
       }}>
         {/* Left navbar links */}
         <ul className="navbar-nav">
+          {!isMobile && (
+            <li className="nav-item">
+              <button className="nav-link btn btn-link" onClick={() => setSidebarOpen(!sidebarOpen)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                <i className="fas fa-bars"></i>
+              </button>
+            </li>
+          )}
           <li className="nav-item">
-            <button className="nav-link btn btn-link" onClick={() => setSidebarOpen(!sidebarOpen)} style={{ border: 'none', background: 'none', outline: 'none' }}>
-              <i className="fas fa-bars"></i>
-            </button>
-          </li>
-          <li className="nav-item d-none d-sm-inline-block">
-            <span className="nav-link font-weight-bold text-dark">{mobileTitle}</span>
+            <span className="nav-link font-weight-bold text-dark">{pageTitle}</span>
           </li>
         </ul>
 
         {/* Right navbar links */}
         <ul className="navbar-nav ml-auto align-items-center">
           <li className="nav-item mr-3">
-            <span className="font-weight-bold text-secondary" style={{ fontSize: '14px' }}>
-              <i className="fas fa-user-circle mr-1"></i> {displayName} ({userRole})
+            <button className="nav-link btn btn-link p-0 position-relative" onClick={() => setShowNotificationsModal(true)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+              <i className="fas fa-bell text-secondary" style={{ fontSize: '18px' }}></i>
+              {notifications.length > 0 && (
+                <span className="position-absolute badge rounded-pill bg-danger" style={{ top: '-8px', right: '-8px', fontSize: '9px', padding: '3px 6px' }}>
+                  {notifications.length}
+                </span>
+              )}
+            </button>
+          </li>
+          <li className="nav-item mr-2 mr-md-3">
+            <span className="font-weight-bold text-secondary" style={{ fontSize: '13px' }}>
+              <i className="fas fa-user-circle mr-1"></i>
+              <span className="d-none d-sm-inline">{displayName} </span>
+              <span className="badge badge-secondary">{userRole}</span>
             </span>
           </li>
           <li className="nav-item">
-            <button className="btn btn-outline-danger btn-sm" onClick={handleLogout}>
-              <i className="fas fa-sign-out-alt"></i> Logout
+            <button className="btn btn-outline-danger btn-sm" onClick={handleLogout} style={{ padding: isMobile ? '4px 8px' : '4px 12px' }}>
+              <i className="fas fa-sign-out-alt"></i>
+              <span className="d-none d-md-inline ml-1">Logout</span>
             </button>
           </li>
         </ul>
@@ -155,10 +267,9 @@ export default function Layout() {
         transform: sidebarOpen ? 'translateX(0)' : 'translateX(-250px)',
         transition: 'transform .3s ease-in-out'
       }}>
-        {/* Brand Logo */}
-        <div className="brand-link d-flex align-items-center" style={{ borderBottom: '1px solid #4f5962', padding: '15px' }}>
-          <img src="/logo.png" alt="Cyrix Logo" className="brand-image img-circle elevation-3" style={{ opacity: '.8', maxHeight: '33px', float: 'none' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-          <span className="brand-text font-weight-bold text-white pl-2" style={{ fontSize: '18px' }}>Cyrix Healthcare</span>
+        {/* Brand Logo Wrapper (centered, clean white pill, non-clipped) */}
+        <div className="brand-link d-flex justify-content-center align-items-center" style={{ borderBottom: '1px solid #4f5962', padding: '15px 10px' }}>
+          <img src="/logo.png" alt="Cyrix Logo" style={{ maxHeight: '38px', width: 'auto', backgroundColor: '#ffffff', padding: '4px 12px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         </div>
 
         {/* Sidebar */}
@@ -178,21 +289,48 @@ export default function Layout() {
           <nav className="mt-2">
             <ul className="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
               {activeItems.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = activeTab === item.id;
                 return (
                   <li className="nav-item" key={item.id} style={{ width: '100%' }}>
-                    <Link to={item.path} className={`nav-link ${isActive ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', margin: '2px 0' }}>
+                    <button 
+                      onClick={() => changeTab(item.id)} 
+                      className={`nav-link btn btn-link text-left ${isActive ? 'active' : ''}`} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        margin: '2px 0', 
+                        border: 'none', 
+                        background: 'none', 
+                        width: '100%', 
+                        color: isActive ? '#fff' : '#c2c7d0',
+                        boxShadow: 'none',
+                        textAlign: 'left'
+                      }}
+                    >
                       <i className={`nav-icon ${item.icon}`} style={{ width: '24px', textAlign: 'center' }}></i>
                       <p style={{ margin: '0 0 0 10px' }}>{item.label}</p>
-                    </Link>
+                    </button>
                   </li>
                 );
               })}
               <li className="nav-item mt-4" style={{ width: '100%' }}>
-                <Link to="/profile" className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center' }}>
+                <button 
+                  onClick={() => changeTab('profile')} 
+                  className={`nav-link btn btn-link text-left ${activeTab === 'profile' ? 'active' : ''}`} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    border: 'none', 
+                    background: 'none', 
+                    width: '100%', 
+                    color: activeTab === 'profile' ? '#fff' : '#c2c7d0',
+                    boxShadow: 'none',
+                    textAlign: 'left'
+                  }}
+                >
                   <i className="nav-icon fas fa-user-circle" style={{ width: '24px', textAlign: 'center' }}></i>
                   <p style={{ margin: '0 0 0 10px' }}>My Profile</p>
-                </Link>
+                </button>
               </li>
             </ul>
           </nav>
@@ -209,7 +347,7 @@ export default function Layout() {
         paddingBottom: '80px' // spacing for mobile bottom-nav
       }}>
         <div className="container-fluid">
-          <Outlet />
+          {renderPageContent()}
         </div>
       </div>
 
@@ -227,34 +365,40 @@ export default function Layout() {
         boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
       }}>
         {activeItems.slice(0, 4).map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = activeTab === item.id;
           return (
-            <Link key={item.id} to={item.path} style={{
+            <button key={item.id} onClick={() => changeTab(item.id)} style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               textDecoration: 'none',
               color: isActive ? 'var(--primary)' : '#6c757d',
               fontSize: '11px',
-              fontWeight: 600
+              fontWeight: 600,
+              border: 'none',
+              background: 'none',
+              padding: 0
             }}>
               <i className={item.icon} style={{ fontSize: '18px', marginBottom: '4px' }}></i>
               <span>{item.id === 'dashboard' ? 'Home' : item.label.split(' ')[0]}</span>
-            </Link>
+            </button>
           );
         })}
-        <Link to="/profile" style={{
+        <button onClick={() => changeTab('profile')} style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           textDecoration: 'none',
-          color: location.pathname === '/profile' ? 'var(--primary)' : '#6c757d',
+          color: activeTab === 'profile' ? 'var(--primary)' : '#6c757d',
           fontSize: '11px',
-          fontWeight: 600
+          fontWeight: 600,
+          border: 'none',
+          background: 'none',
+          padding: 0
         }}>
           <i className="fas fa-user-circle" style={{ fontSize: '18px', marginBottom: '4px' }}></i>
           <span>Profile</span>
-        </Link>
+        </button>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -293,6 +437,54 @@ export default function Layout() {
                 <div className="modal-footer justify-content-center">
                   <button className="btn btn-secondary px-4 mr-2" onClick={() => setShowLogoutModal(false)}>Cancel</button>
                   <button className="btn btn-danger px-4" onClick={confirmLogout}>Logout</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Notifications Modal */}
+      {showNotificationsModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1050 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1060 }} tabIndex={-1} role="dialog" onClick={() => setShowNotificationsModal(false)}>
+            <div className="modal-dialog modal-dialog-centered" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-dark text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white">
+                    <i className="fas fa-bell mr-2 text-warning"></i> Notifications
+                  </h5>
+                  <button type="button" className="close text-white" onClick={() => setShowNotificationsModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body p-3" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  {notifications.length === 0 ? (
+                    <div className="text-center p-4 text-muted">
+                      <i className="fas fa-bell-slash fa-2x mb-2"></i>
+                      <p className="font-weight-bold mb-0">No new notifications.</p>
+                    </div>
+                  ) : (
+                    <div className="list-group list-group-flush">
+                      {notifications.map((n, idx) => (
+                        <div key={idx} className="list-group-item px-0 py-3 border-bottom border-light">
+                          <p className="mb-1 text-dark" style={{ fontSize: '13px', lineHeight: '1.4' }}>{n.message}</p>
+                          <small className="text-muted" style={{ fontSize: '10px' }}>
+                            {new Date(n.created_at).toLocaleString('en-IN')}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer justify-content-between bg-light border-top-0 p-3">
+                  {notifications.length > 0 ? (
+                    <button className="btn btn-outline-danger btn-sm font-weight-bold" onClick={clearNotifications}>
+                      <i className="fas fa-trash-alt mr-1"></i> Clear All
+                    </button>
+                  ) : <div />}
+                  <button className="btn btn-secondary btn-sm px-4" onClick={() => setShowNotificationsModal(false)}>Close</button>
                 </div>
               </div>
             </div>

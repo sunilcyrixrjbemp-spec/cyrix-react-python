@@ -52,6 +52,18 @@ export default function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Tabs state
+  const [activeTab, setActiveTab] = useState<'users' | 'profile-requests' | 'audit-logs' | 'error-logs'>('users');
+
+  // Profile update requests state
+  const [profileRequests, setProfileRequests] = useState<any[]>([]);
+  const [profileRequestsLoading, setProfileRequestsLoading] = useState(false);
+
+  // System logs state
+  const [systemLogs, setSystemLogs] = useState<any[]>([]);
+  const [errorLogs, setErrorLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
   // Modals state
   const [showAddEditModal, setShowAddEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -84,6 +96,79 @@ export default function Admin() {
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'users') {
+      loadUsers();
+    } else if (activeTab === 'profile-requests') {
+      loadProfileRequests();
+    } else if (activeTab === 'audit-logs') {
+      loadLogs('action');
+    } else if (activeTab === 'error-logs') {
+      loadLogs('error');
+    }
+  }, [activeTab]);
+
+  const loadProfileRequests = async () => {
+    setProfileRequestsLoading(true);
+    try {
+      const res = await fetch('/api/admin/profile-requests');
+      const data = await res.json();
+      if (data.success) {
+        setProfileRequests(data.requests || []);
+      } else {
+        showToast(data.message || 'Failed to load profile requests.', 'danger');
+      }
+    } catch (err) {
+      showToast('Network error loading profile requests.', 'danger');
+    } finally {
+      setProfileRequestsLoading(false);
+    }
+  };
+
+  const loadLogs = async (type: 'action' | 'error') => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/logs?type=${type}`);
+      const data = await res.json();
+      if (data.success) {
+        if (type === 'action') {
+          setSystemLogs(data.logs || []);
+        } else {
+          setErrorLogs(data.logs || []);
+        }
+      } else {
+        showToast(data.message || 'Failed to load system logs.', 'danger');
+      }
+    } catch (err) {
+      showToast('Network error loading logs.', 'danger');
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleProfileRequestAction = async (id: number, action: 'Approve' | 'Reject') => {
+    if (!window.confirm(`Are you sure you want to ${action.toLowerCase()} this profile update request?`)) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/profile-requests/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Request successfully ${action.toLowerCase()}d.`, 'success');
+        loadProfileRequests();
+      } else {
+        showToast(data.message || 'Action failed.', 'danger');
+      }
+    } catch (err) {
+      showToast('Network failure.', 'danger');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const showToast = (msg: string, type: Toast['type'] = 'info') => {
     setToasts(prev => [...prev, { msg, type }]);
@@ -335,33 +420,80 @@ export default function Admin() {
       <div className="row align-items-center mb-4">
         <div className="col-sm-6">
           <h1 className="m-0 font-weight-bold text-dark h3">
-            <i className="fas fa-user-cog mr-2 text-primary"></i> User Directory
+            <i className="fas fa-user-shield mr-2 text-danger"></i> Admin Console
           </h1>
-          <p className="text-muted mb-0" style={{ fontSize: '13px' }}>Manage user accounts, roles, zones, and page view permissions.</p>
+          <p className="text-muted mb-0" style={{ fontSize: '13px' }}>Manage user accounts, page access permissions, system audit logs, and profile change requests.</p>
         </div>
         <div className="col-sm-6 text-sm-right mt-3 mt-sm-0">
-          <div className="d-inline-flex align-items-center w-100 justify-content-sm-end" style={{ gap: '10px' }}>
-            <div className="input-group" style={{ maxWidth: '300px' }}>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="input-group-append">
-                <span className="input-group-text"><i className="fas fa-search"></i></span>
+          {activeTab === 'users' && (
+            <div className="d-inline-flex align-items-center w-100 justify-content-sm-end" style={{ gap: '10px' }}>
+              <div className="input-group" style={{ maxWidth: '300px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <div className="input-group-append">
+                  <span className="input-group-text"><i className="fas fa-search"></i></span>
+                </div>
               </div>
+              <button className="btn btn-primary" onClick={openAddModal}>
+                <i className="fas fa-plus-circle mr-1"></i> Add User
+              </button>
             </div>
-            <button className="btn btn-primary" onClick={openAddModal}>
-              <i className="fas fa-plus-circle mr-1"></i> Add User
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* DESKTOP VIEWPORT DESIGN */}
-      <div className="d-none d-md-block">
+      {/* HORIZONTALLY SCROLLABLE PREMIUM TAB BAR */}
+      <ul className="nav nav-tabs mb-4 bg-white p-2 rounded shadow-sm border-0" style={{ display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', WebkitOverflowScrolling: 'touch', gap: '5px' }}>
+        <li className="nav-item">
+          <button 
+            className={`nav-link border-0 font-weight-bold text-uppercase py-2 px-4 ${activeTab === 'users' ? 'active bg-primary text-white' : 'text-secondary'}`}
+            style={{ borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease-in-out', whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('users')}
+          >
+            <i className="fas fa-users mr-2"></i> User Directory
+          </button>
+        </li>
+        <li className="nav-item">
+          <button 
+            className={`nav-link border-0 font-weight-bold text-uppercase py-2 px-4 ${activeTab === 'profile-requests' ? 'active bg-primary text-white' : 'text-secondary'}`}
+            style={{ borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease-in-out', whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('profile-requests')}
+          >
+            <i className="fas fa-id-card mr-2"></i> Update Requests
+            {profileRequests.filter(r => r.status === 'Pending').length > 0 && (
+              <span className="badge badge-danger ml-2">{profileRequests.filter(r => r.status === 'Pending').length}</span>
+            )}
+          </button>
+        </li>
+        <li className="nav-item">
+          <button 
+            className={`nav-link border-0 font-weight-bold text-uppercase py-2 px-4 ${activeTab === 'audit-logs' ? 'active bg-primary text-white' : 'text-secondary'}`}
+            style={{ borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease-in-out', whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('audit-logs')}
+          >
+            <i className="fas fa-history mr-2"></i> Audit Logs
+          </button>
+        </li>
+        <li className="nav-item">
+          <button 
+            className={`nav-link border-0 font-weight-bold text-uppercase py-2 px-4 ${activeTab === 'error-logs' ? 'active bg-primary text-white' : 'text-secondary'}`}
+            style={{ borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease-in-out', whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('error-logs')}
+          >
+            <i className="fas fa-exclamation-triangle mr-2"></i> Error Logs
+          </button>
+        </li>
+      </ul>
+
+      {activeTab === 'users' && (
+        <>
+          {/* DESKTOP VIEWPORT DESIGN */}
+          <div className="d-none d-md-block">
         <div className="card card-primary card-outline shadow-sm">
           <div className="card-header border-bottom d-flex align-items-center justify-content-between p-3">
             <h3 className="card-title font-weight-bold text-dark m-0">All System Users</h3>
@@ -506,6 +638,227 @@ export default function Admin() {
           ))
         )}
       </div>
+      </>
+      )}
+
+      {/* PROFILE UPDATE REQUESTS TAB */}
+      {activeTab === 'profile-requests' && (
+        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+          <div className="card-header border-0 bg-white p-3 border-bottom d-flex align-items-center justify-content-between">
+            <h5 className="font-weight-bold text-dark mb-0">Profile Update Requests</h5>
+            <button className="btn btn-outline-secondary btn-sm" onClick={loadProfileRequests}>
+              <i className="fas fa-sync-alt mr-1"></i> Refresh
+            </button>
+          </div>
+          <div className="card-body p-0">
+            {profileRequestsLoading ? (
+              <div className="text-center p-5">
+                <div className="spinner-border text-primary" role="status"></div>
+                <p className="mt-2 font-weight-bold">Fetching update requests...</p>
+              </div>
+            ) : profileRequests.length === 0 ? (
+              <div className="text-center p-5 text-muted">
+                <i className="fas fa-check-double fa-3x mb-3 text-success"></i>
+                <p className="font-weight-bold mb-0">All caught up! No pending profile changes.</p>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-striped table-hover align-middle mb-0">
+                  <thead className="bg-light text-secondary">
+                    <tr>
+                      <th>Submitted At</th>
+                      <th>User ID</th>
+                      <th>Name / E-Code</th>
+                      <th>Requested Changes</th>
+                      <th>Status</th>
+                      <th className="text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profileRequests.map((req) => {
+                      let newDataMap: Record<string, string> = {};
+                      try {
+                        newDataMap = JSON.parse(req.new_data || '{}');
+                      } catch (e) {
+                        newDataMap = {};
+                      }
+
+                      return (
+                        <tr key={req.id}>
+                          <td style={{ fontSize: '13px' }}>{new Date(req.created_at).toLocaleString('en-IN')}</td>
+                          <td><span className="badge badge-light border text-monospace">{req.user_id}</span></td>
+                          <td>
+                            <div className="font-weight-bold text-primary">{req.full_name}</div>
+                            <small className="text-muted">{req.e_code}</small>
+                          </td>
+                          <td>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', maxWidth: '350px' }}>
+                              {Object.entries(newDataMap).map(([k, v]) => (
+                                <div key={k} className="p-1 border rounded bg-white">
+                                  <strong className="text-uppercase text-secondary" style={{ fontSize: '9px' }}>{k.replace('_', ' ')}:</strong>
+                                  <span className="d-block text-dark font-weight-bold">{String(v || '—')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`badge ${req.status === 'Pending' ? 'badge-warning text-white' : req.status === 'Approved' ? 'badge-success' : 'badge-danger'}`}>
+                              {req.status}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            {req.status === 'Pending' ? (
+                              <div className="d-inline-flex" style={{ gap: '6px' }}>
+                                <button 
+                                  className="btn btn-success btn-xs font-weight-bold px-2 py-1"
+                                  onClick={() => handleProfileRequestAction(req.id, 'Approve')}
+                                >
+                                  <i className="fas fa-check mr-1"></i> Approve
+                                </button>
+                                <button 
+                                  className="btn btn-danger btn-xs font-weight-bold px-2 py-1"
+                                  onClick={() => handleProfileRequestAction(req.id, 'Reject')}
+                                >
+                                  <i className="fas fa-times mr-1"></i> Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-muted font-italic" style={{ fontSize: '12px' }}>Processed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AUDIT LOGS TAB */}
+      {activeTab === 'audit-logs' && (
+        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+          <div className="card-header border-0 bg-white p-3 border-bottom d-flex align-items-center justify-content-between">
+            <h5 className="font-weight-bold text-dark mb-0">System Action Logs</h5>
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => loadLogs('action')}>
+              <i className="fas fa-sync-alt mr-1"></i> Refresh
+            </button>
+          </div>
+          <div className="card-body p-0">
+            {logsLoading ? (
+              <div className="text-center p-5">
+                <div className="spinner-border text-primary" role="status"></div>
+                <p className="mt-2 font-weight-bold">Loading action logs...</p>
+              </div>
+            ) : systemLogs.length === 0 ? (
+              <div className="text-center p-5 text-muted">
+                <i className="fas fa-history fa-3x mb-3"></i>
+                <p className="font-weight-bold mb-0">No system action logs available.</p>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-striped table-hover align-middle mb-0" style={{ fontSize: '13px' }}>
+                  <thead className="bg-light text-secondary">
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>User ID</th>
+                      <th>Full Name</th>
+                      <th>Action Executed</th>
+                      <th>IP Address</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {systemLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td>{new Date(log.created_at).toLocaleString('en-IN')}</td>
+                        <td><span className="badge badge-light border text-monospace">{log.user_id || 'System'}</span></td>
+                        <td className="font-weight-bold text-dark">{log.full_name || 'System/Guest'}</td>
+                        <td className="font-weight-bold text-primary">{log.action}</td>
+                        <td>{log.ip_address || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ERROR LOGS TAB */}
+      {activeTab === 'error-logs' && (
+        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+          <div className="card-header border-0 bg-white p-3 border-bottom d-flex align-items-center justify-content-between">
+            <h5 className="font-weight-bold text-dark mb-0">System Error & Fault Logs</h5>
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => loadLogs('error')}>
+              <i className="fas fa-sync-alt mr-1"></i> Refresh
+            </button>
+          </div>
+          <div className="card-body p-0">
+            {logsLoading ? (
+              <div className="text-center p-5">
+                <div className="spinner-border text-primary" role="status"></div>
+                <p className="mt-2 font-weight-bold">Loading error logs...</p>
+              </div>
+            ) : errorLogs.length === 0 ? (
+              <div className="text-center p-5 text-muted">
+                <i className="fas fa-heart fa-3x mb-3 text-success"></i>
+                <p className="font-weight-bold mb-0">Zero errors! The system is running flawlessly.</p>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-striped table-hover align-middle mb-0" style={{ fontSize: '13px' }}>
+                  <thead className="bg-light text-secondary">
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>User ID</th>
+                      <th>Error Message</th>
+                      <th>Path</th>
+                      <th>Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {errorLogs.map((log) => (
+                      <React.Fragment key={log.id}>
+                        <tr>
+                          <td>{new Date(log.created_at).toLocaleString('en-IN')}</td>
+                          <td><span className="badge badge-light border text-monospace">{log.user_id || 'System'}</span></td>
+                          <td className="font-weight-bold text-danger">{log.error_message}</td>
+                          <td className="text-muted">{log.path || 'N/A'}</td>
+                          <td>
+                            {log.stack_trace && (
+                              <button 
+                                className="btn btn-link btn-xs p-0 font-weight-bold"
+                                onClick={() => {
+                                  const el = document.getElementById(`stack-${log.id}`);
+                                  if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+                                }}
+                              >
+                                Toggle Stack
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {log.stack_trace && (
+                          <tr id={`stack-${log.id}`} style={{ display: 'none', backgroundColor: '#fdf3f2' }}>
+                            <td colSpan={5} className="p-3">
+                              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: '11px', color: '#721c24' }}>
+                                {log.stack_trace}
+                              </pre>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* BOOTSTRAP ADD / EDIT MODAL */}
       {showAddEditModal && (

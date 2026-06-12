@@ -257,207 +257,175 @@ export default function Upload() {
   const fails = uploadResult ? (uploadResult.failLog || []).filter((f) => f && f.reason && !f.reason.includes('Skipped') && !f.reason.includes('Duplicate')) : [];
 
   return (
-    <div style={{ padding: '0 32px 40px' }} className="content-area">
-      {/* Desktop Header */}
-      <div className="page-header desktop-only" style={{ padding: '32px 0 16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div className="page-header-icon" style={{ width: '44px', height: '44px', background: 'var(--primary-50)', color: 'var(--primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-        </div>
-        <div>
-          <h1 style={{ margin: 0 }} className="page-title">Bulk Data Upload</h1>
-          <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-3)' }}>Upload CSV files for Asset, Penalty, and Revenue reports directly into the database.</p>
+    <div className="container-fluid pt-3">
+      {/* Page Header */}
+      <div className="row mb-3 align-items-center">
+        <div className="col-sm-6">
+          <h1 className="m-0 font-weight-bold text-dark"><i className="fas fa-cloud-upload-alt mr-2 text-primary"></i> Data Sync</h1>
         </div>
       </div>
 
-      <div className="upload-container">
-        {/* Tab Bar */}
-        <div className="tab-bar">
-          <button className={`tab-btn ${currentTab === 'asset' ? 'active' : ''}`} onClick={() => switchTab('asset')}>
-            {REPORT_TYPES.asset.icon}
-            Asset Report
-          </button>
-          <button className={`tab-btn ${currentTab === 'penalty' ? 'active' : ''}`} onClick={() => switchTab('penalty')}>
-            {REPORT_TYPES.penalty.icon}
-            Penalty Report
-          </button>
-          <button className={`tab-btn ${currentTab === 'revenue' ? 'active' : ''}`} onClick={() => switchTab('revenue')}>
-            {REPORT_TYPES.revenue.icon}
-            Revenue Report
-          </button>
+      <div className="card card-primary card-outline shadow-sm mb-4">
+        <div className="card-header p-0 border-bottom-0">
+          <ul className="nav nav-tabs" id="custom-tabs-four-tab" role="tablist" style={{ padding: '10px 10px 0' }}>
+            <li className="nav-item">
+              <button className={`nav-link ${currentTab === 'asset' ? 'active' : ''}`} onClick={() => switchTab('asset')} style={{ fontWeight: 600, border: 'none', background: 'transparent' }}>
+                Asset Report
+              </button>
+            </li>
+            <li className="nav-item">
+              <button className={`nav-link ${currentTab === 'penalty' ? 'active' : ''}`} onClick={() => switchTab('penalty')} style={{ fontWeight: 600, border: 'none', background: 'transparent' }}>
+                Penalty Report
+              </button>
+            </li>
+            <li className="nav-item">
+              <button className={`nav-link ${currentTab === 'revenue' ? 'active' : ''}`} onClick={() => switchTab('revenue')} style={{ fontWeight: 600, border: 'none', background: 'transparent' }}>
+                Revenue Report
+              </button>
+            </li>
+          </ul>
         </div>
-
-        {/* Upload Card */}
-        <div className="upload-card">
-          <div className="upload-card-header">
-            <h2 id="card-title">
-              {report.icon}
+        
+        <div className="card-body">
+          <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <h4 className="font-weight-bold text-dark m-0">
               {report.title}
-            </h2>
-            <button className="btn-ghost" onClick={downloadTemplate}>
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" style={{ marginRight: '6px' }}>
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              CSV Template
+            </h4>
+            <button className="btn btn-outline-primary btn-sm" onClick={downloadTemplate}>
+              <i className="fas fa-download mr-1"></i> CSV Template
             </button>
           </div>
 
           {/* Drop Zone */}
           {!selectedFile && (
             <div
-              className={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
-              id="dropZone"
+              className={`border border-dashed border-primary rounded p-5 text-center bg-light ${isDragOver ? 'bg-secondary' : ''}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
+              style={{ cursor: 'pointer', transition: 'background-color 0.2s', borderStyle: 'dashed', borderWidth: '2px' }}
+              onClick={() => fileInputRef.current?.click()}
             >
-              <input type="file" id="csvFile" accept=".csv" onChange={handleFileSelect} ref={fileInputRef} />
-              <div className="drop-icon">
-                <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
+              <input type="file" id="csvFile" accept=".csv" onChange={handleFileSelect} ref={fileInputRef} style={{ display: 'none' }} />
+              <div>
+                <div className="text-primary mb-3" style={{ fontSize: '32px' }}>
+                  <i className="fas fa-cloud-upload-alt"></i>
+                </div>
+                <h5 className="font-weight-bold text-dark">Drop your CSV file here</h5>
+                <p className="text-muted mb-2">or click to browse from your device</p>
+                <small className="text-secondary d-block">Only .csv files accepted • Max size 50MB • Up to 2,00,000 rows at once</small>
               </div>
-              <h3>Drop your CSV file here</h3>
-              <p>or click to browse from your device</p>
-              <small>Only .csv files accepted • Max size 50MB • Up to 2,00,000 rows at once</small>
             </div>
           )}
 
           {/* File Preview */}
           {selectedFile && (
-            <div className="file-preview show" id="filePreview">
-              <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--success)', marginRight: '8px' }}>
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-              <div className="file-preview-info">
-                <div className="file-preview-name">{selectedFile.name}</div>
-                <div className="file-preview-size">{formatFileSize(selectedFile.size)}</div>
+            <div className="alert alert-success d-flex align-items-center justify-content-between p-3 mb-3" role="alert" style={{ background: '#d1f7ec', color: '#0d7a5f', border: '1px solid #a2eed8' }}>
+              <div className="d-flex align-items-center">
+                <i className="fas fa-file-csv fa-2x mr-3"></i>
+                <div>
+                  <h6 className="alert-heading font-weight-bold mb-1" style={{ color: '#0d7a5f' }}>{selectedFile.name}</h6>
+                  <p className="mb-0 small">{formatFileSize(selectedFile.size)}</p>
+                </div>
               </div>
-              <button className="file-preview-remove" onClick={removeFile} disabled={isProcessing}>
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+              <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); removeFile(); }} disabled={isProcessing}>
+                <i className="fas fa-times-circle mr-1"></i> Remove
               </button>
             </div>
           )}
 
           {/* Progress */}
           {showProgress && (
-            <div className="progress-wrap show" id="progressWrap">
-              <div className="progress-label">
-                <span>{progressLabel}</span>
-                <span>{Math.round(progressPct)}%</span>
-              </div>
-              <div className="progress-bar-outer">
-                <div className="progress-bar-inner" style={{ width: `${progressPct}%` }}></div>
+            <div className="progress-group mb-3">
+              <span className="progress-text font-weight-bold text-muted">{progressLabel}</span>
+              <span className="float-right progress-number"><b>{Math.round(progressPct)}%</b></span>
+              <div className="progress progress-sm" style={{ height: '8px', background: '#dee2e6', borderRadius: '4px', overflow: 'hidden' }}>
+                <div className="progress-bar bg-primary" style={{ width: `${progressPct}%`, height: '100%' }}></div>
               </div>
             </div>
           )}
 
           {/* Result Summary */}
           {uploadResult && (
-            <div className="upload-result show">
-              <div className="result-summary">
-                <div className="result-box success">
-                  <div className="result-icon-wrap"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg></div>
-                  <div className="result-box-num">{uploadResult.inserted || 0}</div>
-                  <div className="result-box-label">Rows Inserted</div>
+            <div className="mt-4">
+              <div className="row text-center mb-3">
+                <div className="col-3 border-right">
+                  <h3 className="font-weight-bold text-success m-0">{uploadResult.inserted || 0}</h3>
+                  <span className="text-muted text-uppercase small font-weight-bold">Inserted</span>
                 </div>
                 {uploadResult.updated !== undefined && (
-                  <div className="result-box success">
-                    <div className="result-icon-wrap"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg></div>
-                    <div className="result-box-num">{uploadResult.updated || 0}</div>
-                    <div className="result-box-label">Rows Updated</div>
+                  <div className="col-3 border-right">
+                    <h3 className="font-weight-bold text-info m-0">{uploadResult.updated || 0}</h3>
+                    <span className="text-muted text-uppercase small font-weight-bold">Updated</span>
                   </div>
                 )}
-                <div className="result-box skip">
-                  <div className="result-icon-wrap"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></svg></div>
-                  <div className="result-box-num">{uploadResult.skipped || 0}</div>
-                  <div className="result-box-label">Rows Skipped</div>
+                <div className="col-3 border-right">
+                  <h3 className="font-weight-bold text-secondary m-0">{uploadResult.skipped || 0}</h3>
+                  <span className="text-muted text-uppercase small font-weight-bold">Skipped</span>
                 </div>
-                <div className="result-box error">
-                  <div className="result-icon-wrap"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></div>
-                  <div className="result-box-num">{uploadResult.errors || 0}</div>
-                  <div className="result-box-label">Rows Failed</div>
+                <div className="col-3">
+                  <h3 className="font-weight-bold text-danger m-0">{uploadResult.errors || 0}</h3>
+                  <span className="text-muted text-uppercase small font-weight-bold">Failed</span>
                 </div>
               </div>
 
               {fails.length > 0 && (
-                <div className="error-list" style={{ display: 'block' }}>
-                  <h4>
-                    <svg fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" style={{ width: '16px', height: '16px', marginRight: '6px', display: 'inline-block', verticalAlign: 'middle' }}>
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" />
-                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                    Error Details Log
-                  </h4>
-                  <ul>
-                    {fails.slice(0, 100).map((f, i) => (
-                      <li key={i}>Row {f.row} — {f.id}: {f.reason}</li>
-                    ))}
-                    {fails.length > 100 && <li>...and {fails.length - 100} more</li>}
-                  </ul>
+                <div className="card card-danger card-outline mb-0">
+                  <div className="card-header py-2">
+                    <h6 className="card-title font-weight-bold text-danger m-0">
+                      <i className="fas fa-exclamation-triangle mr-1"></i> Error Log Details
+                    </h6>
+                  </div>
+                  <div className="card-body p-2" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                    <ul className="pl-3 mb-0 text-danger small">
+                      {fails.slice(0, 100).map((f, i) => (
+                        <li key={i}>Row {f.row} — {f.id}: {f.reason}</li>
+                      ))}
+                      {fails.length > 100 && <li>...and {fails.length - 100} more</li>}
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>
           )}
+        </div>
 
-          {/* Footer */}
-          <div className="upload-footer">
-            <span className="upload-footer-note">
-              {selectedFile ? `📄 ${selectedFile.name} ready to upload` : 'Select a CSV file to proceed with upload'}
-            </span>
-            <button className="btn-primary" onClick={uploadCSV} disabled={!selectedFile || isProcessing}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {isProcessing ? (
-                  <>
-                    <span className="spinner"></span>
-                    Processing Data...
-                  </>
-                ) : (
-                  <>
-                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    Upload CSV
-                  </>
-                )}
-              </span>
-            </button>
-          </div>
+        {/* Footer */}
+        <div className="card-footer bg-light d-flex align-items-center justify-content-between py-3 flex-wrap gap-2">
+          <span className="text-muted small">
+            {selectedFile ? `📄 ${selectedFile.name} ready to upload` : 'Select a CSV file to proceed with upload'}
+          </span>
+          <button className="btn btn-primary" onClick={uploadCSV} disabled={!selectedFile || isProcessing}>
+            {isProcessing ? (
+              <>
+                <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                Processing...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-cloud-upload-alt mr-1"></i> Upload CSV
+              </>
+            )}
+          </button>
         </div>
       </div>
 
       {/* TOAST SYSTEM */}
-      <div className="toast-container">
+      <div className="toast-container" style={{ position: 'fixed', bottom: '80px', right: '24px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'none' }}>
         {toasts.map((toast) => {
-          const colors: Record<string, string> = { success: 'var(--success)', danger: 'var(--danger)', error: 'var(--danger)', warning: 'var(--warning)', info: 'var(--info)' };
+          const colors: Record<string, string> = { success: '#28a745', danger: '#dc3545', error: '#dc3545', warning: '#ffc107', info: '#17a2b8' };
           return (
             <div
               key={toast.id}
-              className={`toast ${toast.type}`}
+              className={`toast show`}
               style={{
                 background: 'white',
                 color: colors[toast.type] || colors.info,
-                padding: '14px 20px',
-                borderRadius: '10px',
+                padding: '12px 20px',
+                borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: 600,
-                boxShadow: 'var(--shadow-md)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 borderLeft: `4px solid ${colors[toast.type] || colors.info}`,
                 pointerEvents: 'auto',
                 display: 'flex',
@@ -465,15 +433,7 @@ export default function Upload() {
                 gap: '10px'
               }}
             >
-              <div style={{ width: '20px', height: '20px', flexShrink: 0 }}>
-                {toast.type === 'success' ? (
-                  <svg className="svg-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-                ) : toast.type === 'error' ? (
-                  <svg className="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                ) : (
-                  <svg className="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                )}
-              </div>
+              <i className={toast.type === 'success' ? 'fas fa-check-circle' : toast.type === 'error' || toast.type === 'danger' ? 'fas fa-times-circle' : 'fas fa-info-circle'}></i>
               <span>{toast.msg}</span>
             </div>
           );

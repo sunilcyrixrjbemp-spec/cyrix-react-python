@@ -102,7 +102,11 @@ const ALL_MENU_ITEMS = [
   { id: 'month', label: 'Month Summary', icon: ICONS.month, colorCls: 'text-info', path: '/month', roles: ['Admin', 'Superadmin', 'Manager', 'Coordinator', 'Accounts', 'Divisional Manager'] }
 ];
 
-export default function Home() {
+interface HomeProps {
+  setActiveTab?: (tabId: string) => void;
+}
+
+export default function Home({ setActiveTab }: HomeProps) {
   const navigate = useNavigate();
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
@@ -542,10 +546,10 @@ export default function Home() {
             <div className="row">
               {activeMenuItems.map(item => (
                 <div className="col-md-3 col-sm-6 mb-3" key={item.id}>
-                  <Link to={item.path} className="btn btn-outline-primary btn-block p-4 text-center d-flex flex-column align-items-center h-100 justify-content-center shadow-sm" style={{ border: '1px solid #c5d0eb', borderRadius: '10px' }}>
+                  <div onClick={() => setActiveTab && setActiveTab(item.id)} className="btn btn-outline-primary btn-block p-4 text-center d-flex flex-column align-items-center h-100 justify-content-center shadow-sm" style={{ border: '1px solid #c5d0eb', borderRadius: '10px', cursor: 'pointer' }}>
                     <i className={`${item.icon} fa-2x mb-3 ${item.colorCls}`}></i>
                     <span className="font-weight-bold text-secondary">{item.label}</span>
-                  </Link>
+                  </div>
                 </div>
               ))}
             </div>
@@ -639,14 +643,14 @@ export default function Home() {
             <div className="row">
               {activeMenuItems.map(item => (
                 <div className="col-4 text-center mb-3" key={item.id}>
-                  <Link to={item.path} style={{ textDecoration: 'none', display: 'block' }}>
+                  <div onClick={() => setActiveTab && setActiveTab(item.id)} style={{ textDecoration: 'none', display: 'block', cursor: 'pointer' }}>
                     <div className="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto mb-2" style={{ width: '50px', height: '50px' }}>
                       <i className={`${item.icon} ${item.colorCls}`} style={{ fontSize: '18px' }}></i>
                     </div>
                     <span className="text-secondary font-weight-bold" style={{ fontSize: '10px', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {item.label}
                     </span>
-                  </Link>
+                  </div>
                 </div>
               ))}
             </div>

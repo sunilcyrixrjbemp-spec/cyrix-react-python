@@ -21,6 +21,8 @@ interface EngineerSummary {
   l1_name?: string;
   l2_name?: string;
   project?: string;
+  zone_name?: string;
+  manager_id?: string;
 }
 
 interface Itinerary {
@@ -90,6 +92,9 @@ interface ExpenseDetail {
     url: string;
     bill_type: string;
   }[];
+  level_first_approver_time?: string;
+  level_second_approver_time?: string;
+  reject_reason?: string;
 }
 
 interface Toast {
@@ -116,9 +121,11 @@ export default function Month() {
   const [filterYear, setFilterYear] = useState<string>(() => {
     return String(new Date().getFullYear());
   });
-  const [filterEngineer, setFilterEngineer] = useState('');
-  const [filterDistrict, setFilterDistrict] = useState('');
-  const [districts, setDistricts] = useState<string[]>([]);
+  const [filterZone, setFilterZone] = useState('All');
+  const [filterDistrict, setFilterDistrict] = useState('All');
+  const [filterManager, setFilterManager] = useState('All');
+  const [filterEngineer, setFilterEngineer] = useState('All');
+  const [rawUsers, setRawUsers] = useState<any[]>([]);
   const [searchInput, setSearchInput] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
@@ -165,10 +172,6 @@ export default function Month() {
       } else {
         const list: EngineerSummary[] = data.engineers || [];
         setAllData(list);
-
-        // Update districts list
-        const uniqueDists = Array.from(new Set(list.map((e) => e.district_name).filter(Boolean))).sort();
-        setDistricts(uniqueDists);
       }
     } catch (e) {
       console.error('[loadData]', e);
@@ -185,29 +188,69 @@ export default function Month() {
     }
   }, [currentUserId]);
 
+  // Load raw users for name resolution in dropdown filters
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch('/api/dashboard/filters');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setRawUsers(data.users || []);
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching filter users:', e);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   // Apply local filtering
   useEffect(() => {
-    const engQ = filterEngineer.toLowerCase().trim();
-    const distQ = filterDistrict;
     const searchQ = searchInput.toLowerCase().trim();
 
     const filtered = allData.filter((eng) => {
-      const matchEng = !engQ || (eng.full_name || '').toLowerCase().includes(engQ) || (eng.e_code || '').toLowerCase().includes(engQ);
-      const matchDist = !distQ || eng.district_name === distQ;
+      const matchZone = filterZone === 'All' || eng.zone_name === filterZone;
+      const matchDist = filterDistrict === 'All' || eng.district_name === filterDistrict;
+      const matchMgr  = filterManager === 'All' || eng.manager_id === filterManager;
+      const matchEng  = filterEngineer === 'All' || eng.user_id === filterEngineer;
+      
       const matchSrch = !searchQ || 
         (eng.full_name || '').toLowerCase().includes(searchQ) || 
         (eng.e_code || '').toLowerCase().includes(searchQ) || 
         (eng.district_name || '').toLowerCase().includes(searchQ);
-      return matchEng && matchDist && matchSrch;
+        
+      return matchZone && matchDist && matchMgr && matchEng && matchSrch;
     });
 
     setFilteredData(filtered);
     setCurrentPage(1);
-  }, [allData, filterEngineer, filterDistrict, searchInput]);
+  }, [allData, filterZone, filterDistrict, filterManager, filterEngineer, searchInput]);
+
+  const handleZoneChange = (z: string) => {
+    setFilterZone(z);
+    setFilterDistrict('All');
+    setFilterManager('All');
+    setFilterEngineer('All');
+  };
+
+  const handleDistrictChange = (d: string) => {
+    setFilterDistrict(d);
+    setFilterManager('All');
+    setFilterEngineer('All');
+  };
+
+  const handleManagerChange = (m: string) => {
+    setFilterManager(m);
+    setFilterEngineer('All');
+  };
 
   const clearFilters = () => {
-    setFilterEngineer('');
-    setFilterDistrict('');
+    setFilterZone('All');
+    setFilterDistrict('All');
+    setFilterManager('All');
+    setFilterEngineer('All');
     setSearchInput('');
     loadData();
   };
@@ -701,6 +744,59 @@ export default function Month() {
     }
   };
 
+  const getManagerName = (managerId: string) => {
+    if (!managerId) return '—';
+    const u = rawUsers.find((x) => String(x.user_id) === String(managerId));
+    return u ? u.full_name : managerId;
+  };
+
+  const availableZones = Array.from(new Set(allData.map((e) => e.zone_name).filter((x): x is string => !!x))).sort();
+
+  const availableDistricts = Array.from(
+    new Set(
+      allData
+        .filter((e) => filterZone === 'All' || e.zone_name === filterZone)
+        .map((e) => e.district_name)
+        .filter((x): x is string => !!x)
+    )
+  ).sort();
+
+  const availableManagers = Array.from(
+    new Set(
+      allData
+        .filter((e) => {
+          const matchZone = filterZone === 'All' || e.zone_name === filterZone;
+          const matchDist = filterDistrict === 'All' || e.district_name === filterDistrict;
+          return matchZone && matchDist;
+        })
+        .map((e) => e.manager_id)
+        .filter((x): x is string => !!x)
+    )
+  ).sort();
+
+  const managerOptions = availableManagers.map((mid) => {
+    return { manager_id: mid, name: getManagerName(mid) };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  const availableEngineers = Array.from(
+    new Set(
+      allData
+        .filter((e) => {
+          const matchZone = filterZone === 'All' || e.zone_name === filterZone;
+          const matchDist = filterDistrict === 'All' || e.district_name === filterDistrict;
+          const matchMgr  = filterManager === 'All' || e.manager_id === filterManager;
+          return matchZone && matchDist && matchMgr;
+        })
+        .map((e) => e.user_id)
+        .filter((x): x is string => !!x)
+    )
+  );
+
+  const engineerOptions = availableEngineers.map((uid) => {
+    const eng = allData.find((e) => e.user_id === uid);
+    return { user_id: uid, name: eng ? `${eng.full_name} (${eng.e_code})` : uid };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <>
       {/* Dynamic Embedded Styles to preserve Landscape A4 Print styles */}
@@ -1010,14 +1106,31 @@ export default function Month() {
               </select>
             </div>
             <div className="filter-group">
-              <label>Engineer / Employee</label>
-              <input type="text" id="filterEngineer" placeholder="Search name or E-code..." value={filterEngineer} onChange={(e) => setFilterEngineer(e.target.value)} />
+              <label>Zone</label>
+              <select id="filterZone" value={filterZone} onChange={(e) => handleZoneChange(e.target.value)}>
+                <option value="All">All Zones</option>
+                {availableZones.map((z) => <option key={z} value={z}>{z}</option>)}
+              </select>
             </div>
             <div className="filter-group">
               <label>District</label>
-              <select id="filterDistrict" value={filterDistrict} onChange={(e) => setFilterDistrict(e.target.value)}>
-                <option value="">All Districts</option>
-                {districts.map((d) => <option key={d} value={d}>{d}</option>)}
+              <select id="filterDistrict" value={filterDistrict} onChange={(e) => handleDistrictChange(e.target.value)}>
+                <option value="All">All Districts</option>
+                {availableDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Manager</label>
+              <select id="filterManager" value={filterManager} onChange={(e) => handleManagerChange(e.target.value)}>
+                <option value="All">All Managers</option>
+                {managerOptions.map((m) => <option key={m.manager_id} value={m.manager_id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Engineer</label>
+              <select id="filterEngineer" value={filterEngineer} onChange={(e) => setFilterEngineer(e.target.value)}>
+                <option value="All">All Engineers</option>
+                {engineerOptions.map((eng) => <option key={eng.user_id} value={eng.user_id}>{eng.name}</option>)}
               </select>
             </div>
           </div>
@@ -1130,7 +1243,7 @@ export default function Month() {
         </div>
 
         {/* TABLE */}
-        <div className="table-card">
+        <div className="table-card d-none d-md-block">
           <div className="table-container">
             <table>
               <thead>
@@ -1219,6 +1332,81 @@ export default function Month() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* MOBILE VIEW CARD LIST */}
+        <div className="d-md-none" style={{ marginTop: '16px' }}>
+          {pageData.length === 0 ? (
+            <div className="empty-state" style={{ background: 'white', padding: '30px', borderRadius: '12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+              <div className="empty-icon" style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
+              <div className="empty-text" style={{ fontWeight: 700, color: 'var(--text-2)' }}>No approved expenses found</div>
+              <div className="empty-sub" style={{ fontSize: '13px', color: 'var(--text-3)', marginTop: '4px' }}>Try changing month/year filters and click Apply Filters</div>
+            </div>
+          ) : (
+            pageData.map((eng) => {
+              const sel = selectedEngineers.has(eng.user_id);
+              const monthLabel = filterMonth ? MONTHS[parseInt(filterMonth)] : 'All';
+              return (
+                <div
+                  key={eng.user_id}
+                  className={`mobile-card ${sel ? 'selected' : ''}`}
+                  style={{
+                    background: 'white',
+                    border: sel ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    boxShadow: 'var(--shadow-sm)',
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        className="table-checkbox"
+                        checked={sel}
+                        onChange={() => toggleRow(eng.user_id)}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '15px' }}>{eng.full_name || '—'}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-3)' }}>{eng.designation || ''} · <span className="tag tag-code" style={{ padding: '2px 6px', fontSize: '10px' }}>{eng.e_code || ''}</span></div>
+                      </div>
+                    </div>
+                    <span className="tag tag-blue" style={{ fontSize: '11px' }}>{eng.grade || '—'}</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', margin: '12px 0', fontSize: '13px' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>District</span>
+                      <strong style={{ color: 'var(--text-1)' }}>{eng.district_name || '—'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>Claims</span>
+                      <strong style={{ color: 'var(--success)' }}>{eng.expense_count || 0} claims</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>Total KM</span>
+                      <strong style={{ color: 'var(--text-1)' }}>{parseFloat(String(eng.total_km || 0)).toFixed(1)} km</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>Total Amount</span>
+                      <strong style={{ color: 'var(--primary)', fontSize: '14px' }}>₹{parseFloat(String(eng.total_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+                    <button className="btn btn-outline" style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }} onClick={() => openPanel(eng.user_id)}>
+                      View Details
+                    </button>
+                    <button className="btn btn-primary" style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }} onClick={() => downloadEngineerPDF(eng.user_id)}>
+                      Download PDF
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* PAGINATION */}
@@ -1326,25 +1514,122 @@ export default function Month() {
                               <span style={{ background: 'var(--success-light)', color: 'var(--success)', padding: '3px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 700 }}>APPROVED</span>
                             </div>
                           </div>
-                          <div className="bk-grid" style={{ gap: '8px' }}>
+                          
+                          <div className="bk-grid" style={{ gap: '8px', marginBottom: '12px' }}>
                             <div className="bk-card" style={{ padding: '10px' }}><div className="bk-label">DA</div><div className="bk-val" style={{ fontSize: '13px' }}>₹{parseFloat(String(exp.da_amount || 0)).toFixed(0)}</div></div>
                             <div className="bk-card" style={{ padding: '10px' }}><div className="bk-label">Hotel</div><div className="bk-val" style={{ fontSize: '13px' }}>₹{parseFloat(String(exp.hotel_amount || 0)).toFixed(0)}</div></div>
                             <div className="bk-card" style={{ padding: '10px' }}><div className="bk-label">Other</div><div className="bk-val" style={{ fontSize: '13px' }}>₹{parseFloat(String(exp.other_expense_amount || 0)).toFixed(0)}</div></div>
                             <div className="bk-card" style={{ padding: '10px' }}><div className="bk-label">Travel</div><div className="bk-val" style={{ fontSize: '13px' }}>₹{legs.reduce((sum, leg) => sum + parseFloat(String(leg.travel_amount || 0)) + parseFloat(String(leg.sub_amount || 0)), 0).toFixed(0)}</div></div>
                           </div>
 
+                          {/* Main Expense Attachments */}
+                          {exp.expense_attachments && exp.expense_attachments.length > 0 && (
+                            <div style={{ marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '6px' }}>Expense Bills</div>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {exp.expense_attachments.map((att: any) => {
+                                  const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(att.url || '');
+                                  return (
+                                    <div key={att.attachment_id} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px' }}>
+                                      {isImg ? (
+                                        <a href={att.url} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+                                          <img src={att.url} alt={att.bill_type} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
+                                        </a>
+                                      ) : (
+                                        <a href={att.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', fontSize: '20px', padding: '8px' }}>
+                                          📄
+                                        </a>
+                                      )}
+                                      <span style={{ fontSize: '9px', color: '#64748b', marginTop: '2px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(att.bill_type || 'Bill').replace(/_/g, ' ')}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
                           {legs.length > 0 && (
                             <>
                               <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', margin: '10px 0 6px' }}>{legs.length} Leg{legs.length > 1 ? 's' : ''}</div>
                               {legs.map((leg) => (
-                                <div key={leg.itinerary_id} style={{ background: 'var(--surface-2)', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px', fontSize: '12px' }}>
+                                <div key={leg.itinerary_id} style={{ background: 'var(--surface-2)', borderRadius: '8px', padding: '10px', marginBottom: '8px', fontSize: '12px', border: '1px solid var(--border)' }}>
                                   <strong>{leg.from_location || leg.from_district || '—'} → {leg.to_location || leg.to_district || '—'}</strong>
-                                  <br />
-                                  <span style={{ color: 'var(--text-3)' }}>{leg.travel_mode || ''} · {leg.distance_km || 0} km · ₹{parseFloat(String(leg.travel_amount || 0)).toFixed(0)}</span>
+                                  <div style={{ color: 'var(--text-3)', marginTop: '2px' }}>{leg.travel_mode || ''} · {leg.distance_km || 0} km · ₹{parseFloat(String(leg.travel_amount || 0)).toFixed(0)}</div>
+                                  
+                                  {leg.attachments && leg.attachments.length > 0 && (
+                                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                      {leg.attachments.map((att: any) => {
+                                        const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(att.url || '');
+                                        return (
+                                          <div key={att.attachment_id} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px' }}>
+                                            {isImg ? (
+                                              <a href={att.url} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+                                                <img src={att.url} alt={att.bill_type} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
+                                              </a>
+                                            ) : (
+                                              <a href={att.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', fontSize: '16px', padding: '4px 8px' }}>
+                                                📄
+                                              </a>
+                                            )}
+                                            <span style={{ fontSize: '8px', color: '#64748b', marginTop: '2px', maxWidth: '55px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(att.bill_type || 'Bill').replace(/_/g, ' ')}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </>
                           )}
+
+                          {/* ACTION TIMELINE */}
+                          <div style={{ marginTop: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '8px' }}>Action Timeline</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                <div style={{ color: 'var(--success)', marginTop: '2px' }}>●</div>
+                                <div>
+                                  <strong>Submitted</strong>
+                                  <div style={{ fontSize: '10px', color: '#64748b' }}>{formatDate(exp.expense_date)}</div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                <div style={{ color: exp.level_first_approver_time ? 'var(--success)' : '#94a3b8', marginTop: '2px' }}>●</div>
+                                <div>
+                                  <strong>L1 Approval ({exp.l1_name || 'L1 Manager'})</strong>
+                                  {exp.level_first_approver_time ? (
+                                    <div style={{ fontSize: '10px', color: '#64748b' }}>Approved on {formatDate(exp.level_first_approver_time)}</div>
+                                  ) : (
+                                    <div style={{ fontSize: '10px', color: '#64748b' }}>Pending / Not Approved</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                <div style={{ color: exp.level_second_approver_time ? 'var(--success)' : '#94a3b8', marginTop: '2px' }}>●</div>
+                                <div>
+                                  <strong>L2 Approval ({exp.l2_name || 'L2 Manager'})</strong>
+                                  {exp.level_second_approver_time ? (
+                                    <div style={{ fontSize: '10px', color: '#64748b' }}>Approved on {formatDate(exp.level_second_approver_time)}</div>
+                                  ) : (
+                                    <div style={{ fontSize: '10px', color: '#64748b' }}>Pending / Not Approved</div>
+                                  )}
+                                </div>
+                              </div>
+                              {exp.status === 'Rejected' && (
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                  <div style={{ color: 'var(--danger)', marginTop: '2px' }}>●</div>
+                                  <div>
+                                    <strong style={{ color: 'var(--danger)' }}>Rejected</strong>
+                                    {exp.reject_reason && (
+                                      <div style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic', marginTop: '2px' }}>
+                                        Reason: {exp.reject_reason}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       );
                     })

@@ -2,9 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cyrix Healthcare</title>
+    <meta name="theme-color" content="#343a40" />
+    
+    <!-- SEO Meta Tags -->
+    <title>Cyrix Healthcare - Enterprise Claims & Expense Management</title>
+    <meta name="description" content="Cyrix Healthcare Employee Portal - Expense Claim Submission and Management Portal for field engineers and coordinators." />
+    <meta name="keywords" content="Sunil Bishnoi, Sunny Bishnoi, Cyrix Healthcare Pvt Ltd, Cyrix India, Cyrix Healthcare, Expense Management, Employee Portal, D1 Database" />
+    <meta name="author" content="Sunny Bishnoi" />
+    
+    <!-- PWA Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
     <!-- Google Fonts Source Sans Pro -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback" />
     <!-- FontAwesome Icons -->
@@ -19,5 +30,16 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Register PWA Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('PWA Service Worker registered:', reg.scope))
+            .catch(err => console.error('PWA Service Worker registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>

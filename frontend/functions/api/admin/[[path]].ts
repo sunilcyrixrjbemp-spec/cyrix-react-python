@@ -7,7 +7,7 @@ interface Env {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id",
 };
 
 // PBKDF2 secure password hashing utility for backwards compatibility
@@ -80,13 +80,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return new Response(JSON.stringify({ success: true, districts: districts.results.map((d: any) => d.district_name) }), { headers });
     }
 
+    // Users directory
     if (path === "/api/admin/users") {
       if (method === "GET") {
         const { results } = await env.DB.prepare(`
-          SELECT user_id, e_code, full_name, designation, mobile_number, mail_id, 
-          e_upkaran_id, date_of_birth, date_joining, zone_name, district_name, 
-          grade, role, level_first_approver, level_second_approver, account_status, failed_attempts 
-          FROM user ORDER BY user_id DESC
+          SELECT u.user_id, u.e_code, u.full_name, u.designation, u.mobile_number, u.mail_id, 
+          u.e_upkaran_id, u.date_of_birth, u.date_joining, u.zone_name, u.district_name, 
+          u.grade, u.role, u.level_first_approver, u.level_second_approver, u.account_status, u.failed_attempts,
+          p.allowed_menus
+          FROM user u
+          LEFT JOIN user_permissions p ON u.user_id = p.user_id
+          ORDER BY u.user_id DESC
         `).all();
         return new Response(JSON.stringify({ success: true, users: results }), { headers });
       }
@@ -114,6 +118,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           hashedPassword, salt
         ).run();
 
+        // Set page permissions
+        const allowedMenus = d.allowed_menus || 'dashboard,expense,profile';
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO user_permissions (user_id, full_name, allowed_menus) 
+          VALUES (?, ?, ?)
+        `).bind(nextId, d.full_name, allowedMenus).run();
+
         // Send Welcome Email using Resend
         if (d.mail_id) {
           const emailHtml = getUserCreatedTemplate(d.full_name, nextId, plainPassword, d.role);
@@ -121,7 +132,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             await sendResendEmail(d.mail_id, "Welcome to Cyrix Healthcare - Account Created", emailHtml);
           } catch (emailErr) {
             console.error("Welcome email failed to send: ", emailErr);
-            // Don't fail the API request if only email failed, but we log it
           }
         }
         
@@ -156,11 +166,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         params.push(userId);
 
         await env.DB.prepare(query).bind(...params).run();
+
+        // Update page permissions
+        const allowedMenus = d.allowed_menus || 'dashboard,expense,profile';
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO user_permissions (user_id, full_name, allowed_menus) 
+          VALUES (?, ?, ?)
+        `).bind(userId, d.full_name, allowedMenus).run();
+
         return new Response(JSON.stringify({ success: true }), { headers });
       }
       
       if (method === "DELETE") {
         await env.DB.prepare("DELETE FROM user WHERE user_id = ?").bind(userId).run();
+        await env.DB.prepare("DELETE FROM user_permissions WHERE user_id = ?").bind(userId).run();
         return new Response(JSON.stringify({ success: true }), { headers });
       }
     }
@@ -175,6 +194,96 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       } else {
         await env.DB.prepare("UPDATE user SET account_status = ? WHERE user_id = ?").bind(status, userId).run();
       }
+      return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
+    // GET /api/admin/logs
+    if (path === "/api/admin/logs" && method === "GET") {
+      const type = url.searchParams.get("type") || "action";
+      if (type === "error") {
+        const { results } = await env.DB.prepare("SELECT * FROM error_logs ORDER BY created_at DESC LIMIT 200").all();
+        return new Response(JSON.stringify({ success: true, logs: results }), { headers });
+      } else {
+        const { results } = await env.DB.prepare("SELECT * FROM user_action_logs ORDER BY created_at DESC LIMIT 200").all();
+        return new Response(JSON.stringify({ success: true, logs: results }), { headers });
+      }
+    }
+
+    // GET /api/admin/profile-requests
+    if (path === "/api/admin/profile-requests" && method === "GET") {
+      const { results } = await env.DB.prepare(`
+        SELECT r.id, r.user_id, r.new_data, r.status, r.created_at, u.full_name, u.e_code 
+        FROM profile_update_requests r
+        JOIN user u ON r.user_id = u.user_id
+        ORDER BY r.created_at DESC
+      `).all();
+      return new Response(JSON.stringify({ success: true, requests: results }), { headers });
+    }
+
+    // POST /api/admin/profile-requests/action
+    if (path === "/api/admin/profile-requests/action" && method === "POST") {
+      const body: any = await request.json();
+      const { id, action } = body;
+      if (!id || !action) {
+        return new Response(JSON.stringify({ success: false, message: "Missing id or action." }), { status: 400, headers });
+      }
+
+      const req: any = await env.DB.prepare("SELECT * FROM profile_update_requests WHERE id = ?").bind(id).first();
+      if (!req) {
+        return new Response(JSON.stringify({ success: false, message: "Profile request not found." }), { status: 404, headers });
+      }
+
+      if (req.status !== 'Pending') {
+        return new Response(JSON.stringify({ success: false, message: "Request has already been processed." }), { status: 400, headers });
+      }
+
+      if (action === 'Reject') {
+        await env.DB.prepare("UPDATE profile_update_requests SET status = 'Rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+        
+        // Notify user
+        const msg = `Your profile details update request (ID: ${id}) has been rejected by Admin.`;
+        await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)").bind(req.user_id, msg).run();
+
+        return new Response(JSON.stringify({ success: true, message: "Request rejected successfully." }), { headers });
+      } else if (action === 'Approve') {
+        const newData = JSON.parse(req.new_data);
+        
+        // Update user table
+        await env.DB.prepare(`
+          UPDATE user SET 
+            full_name = ?, date_of_birth = ?, date_joining = ?, designation = ?, 
+            mobile_number = ?, mail_id = ?, e_upkaran_id = ?, zone_name = ?, 
+            district_name = ?, grade = ?, role = ?
+          WHERE user_id = ?
+        `).bind(
+          newData.full_name, newData.date_of_birth, newData.date_joining, newData.designation,
+          newData.mobile_number, newData.mail_id, newData.e_upkaran_id || null, newData.zone_name,
+          newData.district_name, newData.grade, newData.role, req.user_id
+        ).run();
+
+        // Update user_permissions name
+        await env.DB.prepare("UPDATE user_permissions SET full_name = ? WHERE user_id = ?")
+          .bind(newData.full_name, req.user_id).run();
+
+        // Update request status
+        await env.DB.prepare("UPDATE profile_update_requests SET status = 'Approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+
+        // Notify user
+        const msg = `Your profile details update request (ID: ${id}) has been approved. Your profile is updated.`;
+        await env.DB.prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)").bind(req.user_id, msg).run();
+
+        return new Response(JSON.stringify({ success: true, message: "Request approved and details updated." }), { headers });
+      }
+    }
+
+    // POST /api/admin/error-log
+    if (path === "/api/admin/error-log" && method === "POST") {
+      const body: any = await request.json();
+      const { user_id, error_message, stack_trace, path: errPath } = body;
+      await env.DB.prepare(`
+        INSERT INTO error_logs (user_id, error_message, stack_trace, path) 
+        VALUES (?, ?, ?, ?)
+      `).bind(user_id || 'Guest', error_message || 'Unknown', stack_trace || '', errPath || '').run();
       return new Response(JSON.stringify({ success: true }), { headers });
     }
 

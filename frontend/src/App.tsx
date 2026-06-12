@@ -2,18 +2,10 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 
-// Pages
+// Public Identity Pages
 import Login from './pages/Login';
 import Reset from './pages/Reset';
 import Retrieve from './pages/Retrieve';
-import Home from './pages/Home';
-import Admin from './pages/Admin';
-import Approval from './pages/Approval';
-import Expense from './pages/Expense';
-import Month from './pages/Month';
-import Dashboard from './pages/Dashboard';
-import Upload from './pages/Upload';
-import Profile from './pages/Profile';
 import ResetPassword from './pages/ResetPassword';
 
 export default function App() {
@@ -26,17 +18,19 @@ export default function App() {
         <Route path="/retrieve" element={<Retrieve />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Authenticated Layout Routes */}
+        {/* Authenticated Layout Container Route */}
         <Route element={<Layout />}>
-          <Route path="/home" element={<Home />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/approval" element={<Approval />} />
-          <Route path="/expense" element={<Expense />} />
-          <Route path="/month" element={<Month />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/home" element={<div />} /> {/* Layout renders page components directly based on state */}
         </Route>
+
+        {/* Redirect older routes to /home to maintain clean address bar */}
+        <Route path="/admin" element={<Navigate to="/home" replace />} />
+        <Route path="/approval" element={<Navigate to="/home" replace />} />
+        <Route path="/expense" element={<Navigate to="/home" replace />} />
+        <Route path="/month" element={<Navigate to="/home" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+        <Route path="/upload" element={<Navigate to="/home" replace />} />
+        <Route path="/profile" element={<Navigate to="/home" replace />} />
 
         {/* Fallback to Login */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -111,6 +111,15 @@ export default function Approval() {
     total_amount: 0,
     legs: [] as any[]
   });
+
+  // Manager Override Remark state
+  const [managerRemark, setManagerRemark] = useState('');
+  const [managerRemarkError, setManagerRemarkError] = useState(false);
+
+  // Comparison modal state
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareData, setCompareData] = useState<any>(null);
+  const [compareModalLoading, setCompareModalLoading] = useState(false);
   const [editRules, setEditRules] = useState<any>({});
   const [editFacilities, setEditFacilities] = useState<any>({});
   const [editUser, setEditUser] = useState<any>({});
@@ -394,6 +403,8 @@ export default function Approval() {
     setActionId(expId);
     setEditModalLoading(true);
     setShowEditExpenseModal(true);
+    setManagerRemark('');
+    setManagerRemarkError(false);
 
     try {
       const detailRes = await fetch(`/api/approval/detail?id=${expId}&type=Expense&user_id=${currentUserId}`);
@@ -531,8 +542,33 @@ export default function Approval() {
     showToast('✓ Leg appended. Modify fields below.', 'info');
   };
 
+  const openOverrideComparison = async (expId: string) => {
+    setCompareModalLoading(true);
+    setShowCompareModal(true);
+    setCompareData(null);
+    try {
+      const res = await fetch(`/api/approval/detail?id=${expId}&type=Expense&user_id=${currentUserId}`);
+      const data = await res.json();
+      if (data.success) {
+        setCompareData(data);
+      } else {
+        showToast(data.message || 'Error fetching override details.', 'danger');
+        setShowCompareModal(false);
+      }
+    } catch (err) {
+      showToast('Error connecting to API.', 'danger');
+      setShowCompareModal(false);
+    } finally {
+      setCompareModalLoading(false);
+    }
+  };
+
   const submitEditExpense = async () => {
     if (!actionId) return;
+    if (!managerRemark.trim()) {
+      setManagerRemarkError(true);
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetch('/api/approval/edit', {
@@ -546,7 +582,8 @@ export default function Approval() {
           hotel_amount: editFormValues.hotel_amount,
           other_expense_amount: editFormValues.other_expense_amount,
           total_amount: editFormValues.total_amount,
-          legs: editFormValues.legs
+          legs: editFormValues.legs,
+          remark: managerRemark
         })
       });
       const data = await res.json();
@@ -761,7 +798,18 @@ export default function Approval() {
                             {e.type === 'Limit' ? (
                               e.req_type === 'KM' ? `+${e.amount} KM` : `+₹${e.amount}`
                             ) : (
-                              `₹${parseFloat(e.amount as any).toFixed(2)}`
+                              <div className="d-flex align-items-center justify-content-between">
+                                <span>₹{parseFloat(e.amount as any).toFixed(2)}</span>
+                                {(e as any).is_edited === 1 && (
+                                  <button 
+                                    className="btn btn-link btn-xs p-0 ml-2 text-warning"
+                                    onClick={(ev) => { ev.stopPropagation(); openOverrideComparison(e.id); }}
+                                    title="View Manager Override Details"
+                                  >
+                                    <i className="fas fa-eye" style={{ fontSize: '13px' }}></i>
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td>{getStatusBadge(e.status)}</td>
@@ -828,7 +876,18 @@ export default function Approval() {
                         {e.type === 'Limit' ? (
                           e.req_type === 'KM' ? `+${e.amount} KM` : `+₹${e.amount}`
                         ) : (
-                          `₹${parseFloat(e.amount as any).toFixed(2)}`
+                          <span className="d-inline-flex align-items-center">
+                            ₹{parseFloat(e.amount as any).toFixed(2)}
+                            {(e as any).is_edited === 1 && (
+                              <button 
+                                className="btn btn-link btn-xs p-0 ml-2 text-warning"
+                                onClick={(ev) => { ev.stopPropagation(); openOverrideComparison(e.id); }}
+                                title="View Manager Override Details"
+                              >
+                                <i className="fas fa-eye" style={{ fontSize: '12px' }}></i>
+                              </button>
+                            )}
+                          </span>
                         )}
                       </span>
                     </div>
@@ -912,6 +971,21 @@ export default function Approval() {
                     <div className="col-5"><strong>Employee Code:</strong></div><div className="col-7 text-dark"><span className="badge badge-secondary">{detailData.expense?.e_code}</span></div>
                     <div className="col-5"><strong>Area / District:</strong></div><div className="col-7 text-dark">{detailData.expense?.district}</div>
                   </div>
+
+                  {detailData.expense?.is_edited === 1 && (
+                    <div className="alert alert-warning p-2 d-flex align-items-center justify-content-between mb-3" style={{ borderRadius: '8px', fontSize: '12px' }}>
+                      <div>
+                        <i className="fas fa-exclamation-triangle mr-2 text-warning"></i>
+                        <span>Modified by manager override.</span>
+                      </div>
+                      <button 
+                        className="btn btn-warning btn-xs py-1 font-weight-bold" 
+                        onClick={() => openOverrideComparison(detailData.expense.exp_id)}
+                      >
+                        <i className="fas fa-eye mr-1"></i> Compare Original
+                      </button>
+                    </div>
+                  )}
 
                   <h6 className="font-weight-bold text-uppercase text-secondary border-bottom pb-2 mb-3">Expense Summary</h6>
                   <div className="row mb-4">
@@ -1012,6 +1086,62 @@ export default function Approval() {
                       </div>
                     </div>
                   ))}
+
+                  {/* ACTION TIMELINE */}
+                  <div className="card shadow-sm border-0 mb-3 bg-light" style={{ borderRadius: '8px' }}>
+                    <div className="card-body p-3">
+                      <h6 className="font-weight-bold text-uppercase text-secondary mb-3" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>
+                        Action Timeline
+                      </h6>
+                      <div className="d-flex flex-column" style={{ gap: '12px', fontSize: '13px' }}>
+                        <div className="d-flex align-items-start" style={{ gap: '10px' }}>
+                          <div className="text-success mt-1" style={{ fontSize: '10px' }}>●</div>
+                          <div>
+                            <strong className="text-dark">Submitted</strong>
+                            <div className="text-muted" style={{ fontSize: '11px' }}>{formatDate(detailData.expense.created_at || detailData.expense.submitted_at)}</div>
+                          </div>
+                        </div>
+
+                        <div className="d-flex align-items-start" style={{ gap: '10px' }}>
+                          <div className={detailData.expense.level_first_approver_time ? "text-success mt-1" : "text-secondary mt-1"} style={{ fontSize: '10px' }}>●</div>
+                          <div>
+                            <strong className="text-dark">Level 1 Action ({detailData.expense.l1_name || 'L1 Manager'})</strong>
+                            {detailData.expense.level_first_approver_time ? (
+                              <div className="text-muted" style={{ fontSize: '11px' }}>Approved on {formatDate(detailData.expense.level_first_approver_time)}</div>
+                            ) : (
+                              <div className="text-muted" style={{ fontSize: '11px' }}>Pending / No action yet</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="d-flex align-items-start" style={{ gap: '10px' }}>
+                          <div className={detailData.expense.level_second_approver_time ? "text-success mt-1" : "text-secondary mt-1"} style={{ fontSize: '10px' }}>●</div>
+                          <div>
+                            <strong className="text-dark">Level 2 Action ({detailData.expense.l2_name || 'L2 Manager'})</strong>
+                            {detailData.expense.level_second_approver_time ? (
+                              <div className="text-muted" style={{ fontSize: '11px' }}>Approved on {formatDate(detailData.expense.level_second_approver_time)}</div>
+                            ) : (
+                              <div className="text-muted" style={{ fontSize: '11px' }}>Pending / No action yet</div>
+                            )}
+                          </div>
+                        </div>
+
+                        {detailData.expense.status === 'Rejected' && (
+                          <div className="d-flex align-items-start" style={{ gap: '10px' }}>
+                            <div className="text-danger mt-1" style={{ fontSize: '10px' }}>●</div>
+                            <div>
+                              <strong className="text-danger">Rejected</strong>
+                              {detailData.expense.reject_reason && (
+                                <div className="p-2 mt-1 border rounded bg-danger-light text-danger" style={{ fontSize: '12px', fontStyle: 'italic' }}>
+                                  Reason: {detailData.expense.reject_reason}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -1290,6 +1420,28 @@ export default function Approval() {
                       <button type="button" className="btn btn-outline-primary w-100 mt-3 p-3 font-weight-bold" style={{ borderStyle: 'dashed' }} onClick={addNewEditLeg}>
                         + Append Another Journey Leg
                       </button>
+
+                      {/* Manager remark for modifications */}
+                      <div className="form-group mt-3 pt-3 border-top">
+                        <label className="font-weight-bold text-danger text-uppercase" style={{ fontSize: '11px' }}>
+                          Manager Override Reason/Remark <span className="text-danger">*</span>
+                        </label>
+                        <textarea
+                          className={`form-control ${managerRemarkError ? 'is-invalid' : ''}`}
+                          rows={2}
+                          placeholder="Enter the reason for modifying this claim's details/amounts..."
+                          value={managerRemark}
+                          onChange={(e) => {
+                            setManagerRemark(e.target.value);
+                            setManagerRemarkError(false);
+                          }}
+                        />
+                        {managerRemarkError && (
+                          <div className="invalid-feedback font-weight-bold">
+                            Manager override remark is required to save modifications.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1323,16 +1475,193 @@ export default function Approval() {
         })}
       </div>
 
-      <SuccessPopup
-        show={showSuccessPopup}
-        title={successPopupData.title}
-        message={successPopupData.message}
-        amount={successPopupData.amount}
-        date={successPopupData.date}
-        claimId={successPopupData.claimId}
-        onClose={() => setShowSuccessPopup(false)}
-        actionLabel="Done"
-      />
+      {/* BOOTSTRAP OVERRIDE COMPARISON MODAL */}
+      {showCompareModal && (
+        <>
+          <div className="modal-backdrop fade show" style={{ zIndex: 1060 }}></div>
+          <div className="modal fade show" style={{ display: 'block', zIndex: 1070 }} tabIndex={-1} role="dialog" onClick={() => setShowCompareModal(false)}>
+            <div className="modal-dialog modal-lg modal-dialog-centered" role="document" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow" style={{ borderRadius: '12px' }}>
+                <div className="modal-header bg-dark text-white border-bottom-0">
+                  <h5 className="modal-title font-weight-bold text-white">
+                    <i className="fas fa-eye mr-2 text-white"></i> Override Comparison
+                  </h5>
+                  <button type="button" className="close text-white" onClick={() => setShowCompareModal(false)} style={{ border: 'none', background: 'none', outline: 'none' }}>
+                    <span aria-hidden="true" style={{ fontSize: '24px' }}>&times;</span>
+                  </button>
+                </div>
+                <div className="modal-body p-4" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+                  {compareModalLoading ? (
+                    <div className="text-center p-5">
+                      <div className="spinner-border text-primary" role="status"></div>
+                      <p className="mt-2 font-weight-bold">Loading override history...</p>
+                    </div>
+                  ) : compareData ? (
+                    <div>
+                      {/* Summary card comparison */}
+                      <div className="row text-center mb-4">
+                        <div className="col-md-6 mb-3 mb-md-0">
+                          <div className="p-3 border rounded bg-light">
+                            <span className="text-muted font-weight-bold text-uppercase d-block" style={{ fontSize: '10px' }}>Original Total</span>
+                            <h3 className="font-weight-bold text-dark mt-1">₹{compareData.expense?.original_amount?.toFixed(2) || '0.00'}</h3>
+                          </div>
+                        </div>
+                        <div className="col-md-6">
+                          <div className="p-3 border rounded bg-success-light border-success text-success">
+                            <span className="text-success font-weight-bold text-uppercase d-block" style={{ fontSize: '10px' }}>Manager Override Total</span>
+                            <h3 className="font-weight-bold text-success mt-1">₹{compareData.expense?.total_amount?.toFixed(2) || '0.00'}</h3>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Manager Remark Card */}
+                      <div className="card bg-light border-0 mb-4" style={{ borderRadius: '8px' }}>
+                        <div className="card-body p-3">
+                          <span className="text-muted font-weight-bold text-uppercase d-block mb-1" style={{ fontSize: '10px' }}>Manager Remarks / Reason</span>
+                          <p className="text-dark font-italic mb-0" style={{ fontSize: '13px' }}>
+                            "{compareData.expense?.manager_edit_remark || 'No remark provided.'}"
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Leg-by-leg Comparison Table */}
+                      <h6 className="font-weight-bold text-dark border-bottom pb-2 mb-3">Itinerary Changes</h6>
+                      <div className="table-responsive">
+                        <table className="table table-bordered table-striped align-middle" style={{ fontSize: '12px' }}>
+                          <thead className="bg-light text-secondary">
+                            <tr>
+                              <th>Leg</th>
+                              <th>Field</th>
+                              <th>Original Claim (Before Edit)</th>
+                              <th>Overridden Claim (Final)</th>
+                            </tr>
+                          </thead>
+                           <tbody>
+                             {(() => {
+                               let originalLegs: any[] = [];
+                               try {
+                                 if (compareData.expense?.original_details) {
+                                   originalLegs = JSON.parse(compareData.expense.original_details);
+                                 }
+                               } catch (e) {
+                                 originalLegs = [];
+                               }
+
+                               const maxLegs = Math.max(originalLegs.length, (compareData.itineraries || []).length);
+                               const rows: any[] = [];
+
+                               for (let i = 0; i < maxLegs; i++) {
+                                 const orig = originalLegs[i];
+                                 const curr = compareData.itineraries?.[i];
+
+                                 // Helper function to compare and render text color change
+                                 const renderCell = (oVal: any, cVal: any, formatFn?: (v: any) => string) => {
+                                   const oStr = formatFn ? formatFn(oVal) : String(oVal ?? '—');
+                                   const cStr = formatFn ? formatFn(cVal) : String(cVal ?? '—');
+                                   if (oStr !== cStr) {
+                                     return {
+                                       o: <span className="text-danger font-weight-bold">{oStr}</span>,
+                                       c: <span className="text-success font-weight-bold">{cStr}</span>
+                                     };
+                                   }
+                                   return { o: <span>{oStr}</span>, c: <span>{cStr}</span> };
+                                 };
+
+                                 if (!orig && curr) {
+                                   rows.push(
+                                     <tr key={`leg-${i}-added`}>
+                                       <td className="font-weight-bold text-success text-center">Leg {i + 1}</td>
+                                       <td colSpan={3} className="text-success font-weight-bold bg-success-light">
+                                         [Added by Manager] Journey: {curr.from_location} &rarr; {curr.to_location} ({curr.travel_mode}, ₹{(curr.travel_amount + curr.sub_amount).toFixed(2)})
+                                       </td>
+                                     </tr>
+                                   );
+                                 } else if (orig && !curr) {
+                                   rows.push(
+                                     <tr key={`leg-${i}-deleted`}>
+                                       <td className="font-weight-bold text-danger text-center">Leg {i + 1}</td>
+                                       <td colSpan={3} className="text-danger font-weight-bold bg-danger-light text-decoration-line-through">
+                                         [Deleted by Manager] Journey: {orig.from_location} &rarr; {orig.to_location} ({orig.travel_mode}, ₹{(orig.travel_amount + orig.sub_amount).toFixed(2)})
+                                       </td>
+                                     </tr>
+                                   );
+                                 } else if (orig && curr) {
+                                   const journeyComp = renderCell(
+                                     `${orig.from_location || ''} → ${orig.to_location || ''}`,
+                                     `${curr.from_location || ''} → ${curr.to_location || ''}`
+                                   );
+                                   const modeComp = renderCell(
+                                     `${orig.travel_mode || '—'} (${orig.distance_km || 0} KM)`,
+                                     `${curr.travel_mode || '—'} (${curr.distance_km || 0} KM)`
+                                   );
+                                   const amtComp = renderCell(
+                                     orig.travel_amount,
+                                     curr.travel_amount,
+                                     (v) => `₹${parseFloat(v || 0).toFixed(2)}`
+                                   );
+                                   const subComp = renderCell(
+                                     orig.sub_amount > 0 ? `${orig.sub_mode || 'Sub'}: ₹${orig.sub_amount}` : '—',
+                                     curr.sub_amount > 0 ? `${curr.sub_mode || 'Sub'}: ₹${curr.sub_amount}` : '—'
+                                   );
+
+                                   const hasDiff = 
+                                     `${orig.from_location || ''} → ${orig.to_location || ''}` !== `${curr.from_location || ''} → ${curr.to_location || ''}` ||
+                                     `${orig.travel_mode || '—'} (${orig.distance_km || 0} KM)` !== `${curr.travel_mode || '—'} (${curr.distance_km || 0} KM)` ||
+                                     orig.travel_amount !== curr.travel_amount ||
+                                     orig.sub_amount !== curr.sub_amount;
+
+                                   rows.push(
+                                     <tr key={`leg-${i}`} className={hasDiff ? "table-warning-light" : ""}>
+                                       <td rowSpan={4} className="font-weight-bold text-center align-middle" style={{ width: '70px', background: '#f8fafc' }}>Leg {i + 1}</td>
+                                       <td><strong>Route</strong></td>
+                                       <td>{journeyComp.o}</td>
+                                       <td>{journeyComp.c}</td>
+                                     </tr>,
+                                     <tr key={`leg-${i}-mode`} className={hasDiff ? "table-warning-light" : ""}>
+                                       <td><strong>Mode (KM)</strong></td>
+                                       <td>{modeComp.o}</td>
+                                       <td>{modeComp.c}</td>
+                                     </tr>,
+                                     <tr key={`leg-${i}-amt`} className={hasDiff ? "table-warning-light" : ""}>
+                                       <td><strong>Travel Cost</strong></td>
+                                       <td>{amtComp.o}</td>
+                                       <td>{amtComp.c}</td>
+                                     </tr>,
+                                     <tr key={`leg-${i}-sub`} className={hasDiff ? "table-warning-light" : ""}>
+                                       <td><strong>Sub-cost</strong></td>
+                                       <td>{subComp.o}</td>
+                                       <td>{subComp.c}</td>
+                                     </tr>
+                                   );
+                                 }
+                               }
+                               return rows;
+                             })()}
+                           </tbody>
+                         </table>
+                       </div>
+                     </div>
+                   ) : null}
+                 </div>
+                 <div className="modal-footer bg-light border-top-0 justify-content-end p-3">
+                   <button type="button" className="btn btn-secondary px-4 btn-sm" onClick={() => setShowCompareModal(false)}>Close</button>
+                 </div>
+               </div>
+             </div>
+           </div>
+         </>
+       )}
+
+       <SuccessPopup
+         show={showSuccessPopup}
+         title={successPopupData.title}
+         message={successPopupData.message}
+         amount={successPopupData.amount}
+         date={successPopupData.date}
+         claimId={successPopupData.claimId}
+         onClose={() => setShowSuccessPopup(false)}
+         actionLabel="Done"
+       />
     </div>
   );
 }

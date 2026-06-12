@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import '../css/reset.css';
 import Popup from '../components/Popup';
 
 export default function Reset() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'forgot' | 'unlock'>('forgot');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'forgot' | 'unlock'>(
+    tabParam === 'unlock' ? 'unlock' : 'forgot'
+  );
 
   // Forgot Password state
   const [fStep, setFStep] = useState(1);
@@ -15,7 +19,7 @@ export default function Reset() {
   const [fOtp, setFOtp] = useState('');
   const [fPass, setFPass] = useState('');
   const [fConf, setFConf] = useState('');
-  const [fTimeLeft, setFTimeLeft] = useState(300); // 5 mins
+  const [fTimeLeft, setFTimeLeft] = useState(60); // 60 seconds resend timer
   const [fTimerActive, setFTimerActive] = useState(false);
   const [fResendDisabled, setFResendDisabled] = useState(true);
 
@@ -26,7 +30,7 @@ export default function Reset() {
   const [uDob, setUDob] = useState('');
   const [uDoj, setUDoj] = useState('');
   const [uOtp, setUOtp] = useState('');
-  const [uTimeLeft, setUTimeLeft] = useState(300); // 5 mins
+  const [uTimeLeft, setUTimeLeft] = useState(60); // 60 seconds resend timer
   const [uTimerActive, setUTimerActive] = useState(false);
   const [uResendDisabled, setUResendDisabled] = useState(true);
 
@@ -131,7 +135,7 @@ export default function Reset() {
       const data = await res.json();
       if (data.success) {
         setFStep(2);
-        setFTimeLeft(300);
+        setFTimeLeft(60);
         setFTimerActive(true);
         setFResendDisabled(true);
         if (isResend) {
@@ -155,6 +159,12 @@ export default function Reset() {
     } else {
       if (fPass !== fConf) {
         showCustomDialog("Error", "Passwords do not match!", true);
+        return;
+      }
+
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(fPass)) {
+        showCustomDialog("Weak Password", "Password must be at least 8 characters long, and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).", true);
         return;
       }
 
@@ -210,7 +220,7 @@ export default function Reset() {
       const data = await res.json();
       if (data.success) {
         setUStep(2);
-        setUTimeLeft(300);
+        setUTimeLeft(60);
         setUTimerActive(true);
         setUResendDisabled(true);
         if (isResend) {

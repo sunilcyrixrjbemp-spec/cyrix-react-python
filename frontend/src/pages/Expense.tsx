@@ -443,50 +443,119 @@ export default function Expense() {
     );
   };
 
-  // Image compressor helper
-  const compressImage = (file: File, targetSizeKB = 30): Promise<File> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e: any) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
+  // Image & PDF compressor helper (Target 50KB as requested)
+  const compressFileToJpg = (file: File, targetSizeKB = 50): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const targetBytes = targetSizeKB * 1024;
+      const cleanName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
 
-          if (width > 1024 || height > 1024) {
-            const ratio = Math.min(1024 / width, 1024 / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
+      if (file.type === 'application/pdf') {
+        const scriptId = 'pdfjs-script';
+        let script = document.getElementById(scriptId) as HTMLScriptElement;
+        if (!script) {
+          script = document.createElement('script');
+          script.id = scriptId;
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+          document.head.appendChild(script);
+        }
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) ctx.drawImage(img, 0, 0, width, height);
+        const runPdfConversion = () => {
+          const reader = new FileReader();
+          reader.onload = async (e: any) => {
+            try {
+              const typedarray = new Uint8Array(e.target.result as ArrayBuffer);
+              // @ts-ignore
+              const pdfjsLib = window['pdfjs-dist/build/pdf'];
+              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+              const pdf = await pdfjsLib.getDocument(typedarray).promise;
+              const page = await pdf.getPage(1);
+              const viewport = page.getViewport({ scale: 1.5 });
+              const canvas = document.createElement('canvas');
+              const context = canvas.getContext('2d');
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
 
-          let quality = 0.85;
-          const targetBytes = targetSizeKB * 1024;
-
-          const attemptCompress = () => {
-            canvas.toBlob((blob: any) => {
-              if (blob.size <= targetBytes || quality <= 0.1) {
-                const compressedFile = new File([blob], file.name, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now()
-                });
-                resolve(compressedFile);
-              } else {
-                quality -= 0.05;
+              if (context) {
+                await page.render({ canvasContext: context, viewport }).promise;
+                let quality = 0.8;
+                const attemptCompress = () => {
+                  canvas.toBlob((blob: any) => {
+                    if (blob) {
+                      if (blob.size <= targetBytes || quality <= 0.1) {
+                        resolve(new File([blob], cleanName, { type: 'image/jpeg', lastModified: Date.now() }));
+                      } else {
+                        quality -= 0.05;
+                        attemptCompress();
+                      }
+                    } else {
+                      reject(new Error("Canvas export failed"));
+                    }
+                  }, 'image/jpeg', quality);
+                };
                 attemptCompress();
+              } else {
+                reject(new Error("Canvas context is null"));
               }
-            }, 'image/jpeg', quality);
+            } catch (err) {
+              reject(err);
+            }
           };
-          attemptCompress();
+          reader.readAsArrayBuffer(file);
         };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+
+        // @ts-ignore
+        if (window['pdfjs-dist/build/pdf']) {
+          runPdfConversion();
+        } else {
+          script.onload = () => {
+            runPdfConversion();
+          };
+          script.onerror = () => {
+            reject(new Error("Failed to load PDF.js from CDN"));
+          };
+        }
+      } else {
+        // Handle images
+        const reader = new FileReader();
+        reader.onload = (e: any) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > 1200 || height > 1200) {
+              const ratio = Math.min(1200 / width, 1200 / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.drawImage(img, 0, 0, width, height);
+
+            let quality = 0.85;
+            const attemptCompress = () => {
+              canvas.toBlob((blob: any) => {
+                if (blob) {
+                  if (blob.size <= targetBytes || quality <= 0.1) {
+                    resolve(new File([blob], cleanName, { type: 'image/jpeg', lastModified: Date.now() }));
+                  } else {
+                    quality -= 0.05;
+                    attemptCompress();
+                  }
+                } else {
+                  reject(new Error("Canvas export failed"));
+                }
+              }, 'image/jpeg', quality);
+            };
+            attemptCompress();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
     });
   };
 
@@ -497,20 +566,20 @@ export default function Expense() {
       return;
     }
 
-    if (!file.type.startsWith('image/')) {
-      showToast('Only image files are allowed!', 'danger');
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      showToast('Only image or PDF files are allowed!', 'danger');
       return;
     }
 
-    showToast(`Compiling image attachments... (${(file.size / 1024).toFixed(1)} KB)`, 'info');
+    showToast(`Processing attachments... (${(file.size / 1024).toFixed(1)} KB)`, 'info');
 
     try {
-      const compressed = await compressImage(file, 30);
+      const compressed = await compressFileToJpg(file, 50);
       updateLegField(legNum, field as any, compressed);
       updateLegField(legNum, `prev_${field}` as any, URL.createObjectURL(compressed));
-      showToast(`✓ Image processed successfully: ${(compressed.size / 1024).toFixed(1)} KB`, 'success');
+      showToast(`✓ Attachment processed to JPG: ${(compressed.size / 1024).toFixed(1)} KB`, 'success');
     } catch (err) {
-      showToast('Image processing failed.', 'danger');
+      showToast('Attachment processing failed.', 'danger');
     }
   };
 
@@ -1051,7 +1120,7 @@ export default function Expense() {
                   <div style={{ border: '1.5px dashed var(--border)', borderRadius: '8px', background: 'var(--surface-2)', padding: '16px', textAlign: 'center', position: 'relative', cursor: 'pointer', minHeight: '80px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,application/pdf"
                       required={!isEditMode && !leg.prev_comm_mail}
                       onChange={(e) => handleFileChange(leg.leg, 'comm_mail', e.target.files?.[0] || null)}
                       style={{ width: '100%', boxSizing: 'border-box', position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
@@ -1128,7 +1197,7 @@ export default function Expense() {
                     <div style={{ border: '1.5px dashed var(--border)', borderRadius: '8px', background: 'var(--surface-2)', padding: '10px', textAlign: 'center', position: 'relative', cursor: 'pointer', minHeight: '46px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,application/pdf"
                         required={!isEditMode && !leg.prev_main_bill && (leg.mode === 'Train' || leg.amount >= 300)}
                         onChange={(e) => handleFileChange(leg.leg, 'main_bill', e.target.files?.[0] || null)}
                         style={{ width: '100%', boxSizing: 'border-box', position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
@@ -1229,7 +1298,7 @@ export default function Expense() {
                         <div style={{ border: '1.5px dashed var(--border)', borderRadius: '8px', background: 'var(--surface)', padding: '10px', textAlign: 'center', position: 'relative', cursor: 'pointer', minHeight: '46px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,application/pdf"
                             required={!isEditMode && !leg.prev_sub_bill && (leg.sub_mode === 'Train' || leg.sub_amount >= 300)}
                             onChange={(e) => handleFileChange(leg.leg, 'sub_bill', e.target.files?.[0] || null)}
                             style={{ width: '100%', boxSizing: 'border-box', position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
@@ -1289,7 +1358,7 @@ export default function Expense() {
                       <div style={{ border: '1.5px dashed var(--border)', borderRadius: '8px', background: 'var(--surface-2)', padding: '10px', textAlign: 'center', position: 'relative', cursor: 'pointer', minHeight: '46px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,application/pdf"
                           required={!isEditMode && !leg.prev_hotel_bill && leg.hotel > 0}
                           onChange={(e) => handleFileChange(leg.leg, 'hotel_bill', e.target.files?.[0] || null)}
                           style={{ width: '100%', boxSizing: 'border-box', position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
@@ -1353,7 +1422,7 @@ export default function Expense() {
                       <div style={{ border: '1.5px dashed var(--border)', borderRadius: '8px', background: 'var(--surface-2)', padding: '10px', textAlign: 'center', position: 'relative', cursor: 'pointer', minHeight: '46px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,application/pdf"
                           required={!isEditMode && !leg.prev_oth_bill && leg.oth_amount >= 300}
                           onChange={(e) => handleFileChange(leg.leg, 'oth_bill', e.target.files?.[0] || null)}
                           style={{ width: '100%', boxSizing: 'border-box', position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}

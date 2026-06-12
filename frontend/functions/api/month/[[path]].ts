@@ -67,22 +67,31 @@ function buildDateFilter(month: string | null, year: string | null, alias = "em"
 }
 
 async function buildAccessFilter(db: D1Database, userId: string, role: string) {
-  const openRoles = ["Admin", "Superadmin", "Travel Desk", "Accounts"];
+  const openRoles = ["Admin", "Superadmin", "Travel Desk", "Accounts", "Accountant", "Project Head", "HR"];
   if (openRoles.includes(role)) {
+    return { clause: "", params: [] };
+  }
+
+  const user: any = await db.prepare("SELECT zone_name, district_name FROM user WHERE user_id = ?").bind(userId).first();
+  if (!user) {
+    return { clause: "AND 1=0", params: [] };
+  }
+
+  if (user.zone_name === "All") {
     return { clause: "", params: [] };
   }
 
   if (role === "Manager") {
     return {
-      clause: `AND em.level_first_approver = ?`,
-      params: [userId],
+      clause: `AND (em.user_id = ? OR em.level_first_approver = ? OR u.district_name = ?)`,
+      params: [userId, userId, user.district_name],
     };
   }
 
-  if (role === "Coordinator" || role === "Divisional Manager") {
+  if (role === "Coordinator" || role === "Divisional Manager" || role === "DM") {
     return {
-      clause: `AND em.level_second_approver = ?`,
-      params: [userId],
+      clause: `AND u.zone_name = ?`,
+      params: [user.zone_name],
     };
   }
 
@@ -93,7 +102,7 @@ async function buildAccessFilter(db: D1Database, userId: string, role: string) {
     };
   }
 
-  return { clause: "AND 1 = 0", params: [] };
+  return { clause: "AND 1=0", params: [] };
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
@@ -158,6 +167,8 @@ async function handleSummary(url: URL, env: Env, cors: any) {
       u.e_code,
       u.designation,
       u.grade,
+      u.zone_name,
+      u.level_first_approver                      AS manager_id,
       u.district_name,
       u.mobile_number,
       COUNT(DISTINCT em.exp_id)                  AS expense_count,
@@ -176,7 +187,7 @@ async function handleSummary(url: URL, env: Env, cors: any) {
           ${dateFilter.clause}
           ${accessFilter.clause}
     GROUP BY
-      u.user_id, u.full_name, u.e_code, u.designation, u.grade, u.district_name, u.mobile_number
+      u.user_id, u.full_name, u.e_code, u.designation, u.grade, u.zone_name, u.level_first_approver, u.district_name, u.mobile_number
     ORDER BY u.full_name ASC
   `;
 
@@ -200,6 +211,8 @@ async function handleSummary(url: URL, env: Env, cors: any) {
       e_code:               eng.e_code               || "",
       designation:          eng.designation          || "",
       grade:                eng.grade                || "",
+      zone_name:            eng.zone_name            || "",
+      manager_id:           eng.manager_id           || "",
       district_name:        eng.district_name        || "",
       mobile_number:        eng.mobile_number        || "",
       mobile:               eng.mobile_number        || "",
@@ -298,6 +311,9 @@ async function handleDetail(url: URL, env: Env, cors: any) {
       em.status,
       em.level_first_approver,
       em.level_second_approver,
+      em.reject_reason,
+      em.level_first_approver_time,
+      em.level_second_approver_time,
       (SELECT full_name FROM user WHERE user_id = em.level_first_approver) as l1_name,
       (SELECT full_name FROM user WHERE user_id = em.level_second_approver) as l2_name
     FROM expense_master em
@@ -445,6 +461,9 @@ async function handleDetail(url: URL, env: Env, cors: any) {
     status:                exp.status,
     level_first_approver:  exp.level_first_approver,
     level_second_approver: exp.level_second_approver,
+    reject_reason:         exp.reject_reason              || "",
+    level_first_approver_time: exp.level_first_approver_time  || "",
+    level_second_approver_time: exp.level_second_approver_time || "",
 
     itineraries: (itiMap[exp.exp_id] || []).map((leg) => ({
       itinerary_id:     leg.itinerary_id,

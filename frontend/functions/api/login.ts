@@ -34,7 +34,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     const user: any = await env.DB.prepare(
-      "SELECT user_id, password, password_salt, full_name, account_status, failed_attempts, role FROM user WHERE user_id = ?"
+      "SELECT user_id, password, password_salt, full_name, account_status, failed_attempts, role, is_temp_password FROM user WHERE user_id = ?"
     ).bind(user_id).first();
 
     if (!user) {
@@ -108,6 +108,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           .bind(attempts, user_id).run();
         return new Response(JSON.stringify({ success: false, message: `Incorrect password. ${5 - attempts} attempts left.` }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+    }
+
+    // Enforce Password Change for Temporary Passwords
+    if (user.is_temp_password === 1) {
+      return new Response(JSON.stringify({
+        success: true,
+        requires_password_change: true,
+        user_id: user.user_id,
+        message: "Temporary password detected. You must set a new password."
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Reset failed attempts on success

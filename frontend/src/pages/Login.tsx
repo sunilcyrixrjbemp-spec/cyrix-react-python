@@ -42,6 +42,11 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        if (data.requires_password_change) {
+          navigate(`/reset-password?token=TEMP_${encodeURIComponent(data.user_id)}`);
+          return;
+        }
+
         localStorage.clear();
         localStorage.setItem('logged_in_user_id', data.user_id);
         localStorage.setItem('display_name', data.full_name);
@@ -123,9 +128,9 @@ export default function Login() {
           </button>
 
           <div className="form-footer">
-            <Link to="/reset">Account Help</Link>
+            <Link to="/reset?tab=forgot">Forgot Password</Link>
             <span className="divider">|</span>
-            <Link to="/retrieve">Retrieve ID</Link>
+            <Link to="/reset?tab=unlock">Unlock Account</Link>
           </div>
         </form>
 

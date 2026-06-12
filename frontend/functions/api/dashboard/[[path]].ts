@@ -93,7 +93,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // ── FILTERS API ──
     if (path.endsWith('/filters') && method === 'GET') {
       const [usersRes, facRes] = await Promise.all([
-        env.DB.prepare(`SELECT user_id, full_name, role, zone_name, district_name FROM user`).all(),
+        env.DB.prepare(`SELECT user_id, full_name, role, zone_name, district_name, level_first_approver FROM user`).all(),
         env.DB.prepare(`SELECT DISTINCT facility_name, facility_incharge, district_name, zone_name, dm_name, coordinator_name FROM ${cachedFacTable}`).all()
       ]);
       return new Response(safeStringify({ success: true, users: usersRes.results || [], facilities: facRes.results || [] }), { status: 200, headers });
@@ -115,20 +115,35 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       let conds = ['1=1'];
       let params: any[] = [];
       
-      if (!isAdmin) {
-        if (isCoordinator) { conds.push(`f.coordinator_name = ?`); params.push(userName); }
-        else if (isDM)     { conds.push(`f.dm_name = ?`); params.push(userName); }
-        else if (isDI)     { conds.push(`f.district_name = ?`); params.push(user.district_name); }
-        else if (isManager){ conds.push(`f.facility_incharge = ?`); params.push(userName); }
-        else {
+      const openRoles = ["Admin", "Superadmin", "Travel Desk", "Accounts", "Accountant", "Project Head", "HR"];
+      const isOpenRole = openRoles.includes(role) || user.zone_name === "All";
+      
+      if (!isOpenRole) {
+        if (isCoordinator || isDM) {
+          conds.push(`f.zone_name = ?`);
+          params.push(user.zone_name);
+        } else if (isDI) {
+          conds.push(`f.district_name = ?`);
+          params.push(user.district_name);
+        } else if (isManager) {
           const eId = user.e_upkaran_id || 'XXX';
-          conds.push(`(p.attend_engineer_id = ? OR p.close_engineer_id = ?)`); params.push(eId, eId);
+          conds.push(`(p.attend_engineer_id = ? OR p.close_engineer_id = ? OR f.facility_incharge = ? OR f.district_name = ?)`);
+          params.push(eId, eId, userName, user.district_name);
+        } else {
+          const eId = user.e_upkaran_id || 'XXX';
+          conds.push(`(p.attend_engineer_id = ? OR p.close_engineer_id = ?)`);
+          params.push(eId, eId);
         }
       }
       if (filters.zone !== 'All') { conds.push(`f.zone_name = ?`); params.push(filters.zone); }
       if (filters.district !== 'All') { conds.push(`f.district_name = ?`); params.push(filters.district); }
       if (filters.facility !== 'All') { conds.push(`p.hospital_name = ?`); params.push(filters.facility); }
-      if (filters.manager !== 'All') { conds.push(`f.facility_incharge = ?`); params.push(filters.manager); }
+      if (filters.manager !== 'All') {
+        const mgrUser: any = await env.DB.prepare(`SELECT full_name FROM user WHERE user_id = ?`).bind(filters.manager).first();
+        const mgrName = mgrUser ? mgrUser.full_name : filters.manager;
+        conds.push(`f.facility_incharge = ?`);
+        params.push(mgrName);
+      }
       if (filters.engineer !== 'All') { conds.push(`(p.attend_engineer_id = ? OR p.close_engineer_id = ?)`); params.push(filters.engineer, filters.engineer); }
       if (filters.startDate && filters.endDate) {
         conds.push(`(p.complaint_raise_date >= ? AND p.complaint_raise_date <= ?)`);
@@ -191,6 +206,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         conds.push(`(u.district_name = ? OR EXISTS(SELECT 1 FROM expense_itinerary i2 WHERE i2.exp_id = m.exp_id AND i2.to_district = ?))`);
         params.push(filters.district, filters.district);
       }
+      if (filters.manager !== 'All') { conds.push(`u.level_first_approver = ?`); params.push(filters.manager); }
       if (filters.engineer !== 'All') { conds.push(`m.user_id = ?`); params.push(filters.engineer); }
       if (filters.status !== 'All') {
         if (filters.status === 'Pending') conds.push(`m.status LIKE 'Pending%'`);

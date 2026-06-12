@@ -9,6 +9,7 @@ interface UserFilter {
   role: string;
   zone_name: string;
   district_name: string;
+  level_first_approver?: string;
 }
 
 interface FacilityFilter {
@@ -102,6 +103,8 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [status, setStatus] = useState('All');
+  const [filterMonth, setFilterMonth] = useState<string>(() => String(new Date().getMonth() + 1));
+  const [filterYear, setFilterYear] = useState<string>(() => String(new Date().getFullYear()));
 
   const [zone, setZone] = useState('All');
   const [district, setDistrict] = useState('All');
@@ -259,6 +262,21 @@ export default function Dashboard() {
     if (period === 'custom') {
       return { start: startDate, end: endDate };
     }
+    if (period === 'month') {
+      const yNum = parseInt(filterYear, 10);
+      const mNum = parseInt(filterMonth, 10);
+      if (!isNaN(yNum) && !isNaN(mNum) && mNum >= 1 && mNum <= 12) {
+        const startStr = `${yNum}-${String(mNum).padStart(2, '0')}-01`;
+        let nextY = yNum;
+        let nextM = mNum + 1;
+        if (nextM > 12) {
+          nextM = 1;
+          nextY += 1;
+        }
+        const endStr = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+        return { start: startStr, end: endStr };
+      }
+    }
     const start = new Date();
     const end = new Date();
     if (period === 'yesterday') {
@@ -318,7 +336,7 @@ export default function Dashboard() {
     if (userId) {
       fetchDashboardData();
     }
-  }, [userId, quickPeriod, startDate, endDate, zone, district, hospital, manager, engineer]);
+  }, [userId, quickPeriod, startDate, endDate, zone, district, hospital, manager, engineer, filterMonth, filterYear]);
 
   // 4. Processing Filters locally
   const MON_MAP: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
@@ -339,6 +357,8 @@ export default function Dashboard() {
     const yestStart = todayStart - 86400000;
     const customStart = quickPeriod === 'custom' && startDate ? new Date(startDate).getTime() : null;
     const customEnd = quickPeriod === 'custom' && endDate ? new Date(endDate).getTime() + 86400000 : null;
+    const monthStart = quickPeriod === 'month' ? new Date(parseInt(filterYear), parseInt(filterMonth) - 1, 1).getTime() : null;
+    const monthEnd = quickPeriod === 'month' ? new Date(parseInt(filterYear) + (parseInt(filterMonth) === 12 ? 1 : 0), (parseInt(filterMonth) % 12), 1).getTime() : null;
 
     // Filter expenses
     const fExp = expenses.filter((e) => {
@@ -352,6 +372,7 @@ export default function Dashboard() {
       if (quickPeriod === 'today' && t < todayStart) return false;
       if (quickPeriod === 'yesterday' && (t < yestStart || t >= todayStart)) return false;
       if (quickPeriod === 'custom' && customStart && customEnd && (t < customStart || t >= customEnd)) return false;
+      if (quickPeriod === 'month' && monthStart && monthEnd && (t < monthStart || t >= monthEnd)) return false;
       return true;
     });
     setFilteredExp(fExp);
@@ -363,6 +384,7 @@ export default function Dashboard() {
       if (quickPeriod === 'today' && t < todayStart) return false;
       if (quickPeriod === 'yesterday' && (t < yestStart || t >= todayStart)) return false;
       if (quickPeriod === 'custom' && customStart && customEnd && (t < customStart || t >= customEnd)) return false;
+      if (quickPeriod === 'month' && monthStart && monthEnd && (t < monthStart || t >= monthEnd)) return false;
       return true;
     });
     setFilteredPen(fPen);
@@ -859,11 +881,17 @@ export default function Dashboard() {
     : (isCoordinator || isDM ? ZONE_DISTRICT_MAP[userZone] || [] : (isDI ? [userDistrict] : []));
 
   const hospSet = Array.from(new Set(validFacilities.map((f) => f.facility_name).filter(Boolean))).sort();
-  const mgrSet = Array.from(new Set(validFacilities.map((f) => f.facility_incharge).filter(Boolean))).sort();
+  const mgrOptions = validUsers
+    .filter((u) => (u.role === 'Manager' || u.role === 'Admin' || u.role === 'Superadmin') && u.full_name)
+    .map((u) => ({ user_id: u.user_id, name: u.full_name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const engMap = new Map<string, string>();
   validUsers.forEach((u) => {
     if (u.role === 'Engineer' && u.full_name) {
+      if (manager !== 'All' && String(u.level_first_approver) !== String(manager)) {
+        return;
+      }
       engMap.set(String(u.user_id), u.full_name);
     }
   });
@@ -943,10 +971,41 @@ export default function Dashboard() {
                 <option value="yesterday">Yesterday</option>
                 <option value="7">Last 7 Days</option>
                 <option value="30">Last 30 Days</option>
+                <option value="month">Specific Month</option>
                 <option value="0">All Time</option>
                 <option value="custom">Custom Date Range</option>
               </select>
             </div>
+
+            {quickPeriod === 'month' && (
+              <>
+                <div className="filter-group">
+                  <label className="filter-label">Month</label>
+                  <select className="filter-select" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label className="filter-label">Year</label>
+                  <select className="filter-select" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
+                    <option value="2024">2024</option>
+                    <option value="2025">2025</option>
+                    <option value="2026">2026</option>
+                  </select>
+                </div>
+              </>
+            )}
 
             {quickPeriod === 'custom' && (
               <div className="filter-group" style={{ display: 'flex', flex: 2, minWidth: '300px' }}>
@@ -1004,7 +1063,7 @@ export default function Dashboard() {
                     <label className="filter-label">Manager</label>
                     <select className="filter-select" value={manager} onChange={(e) => handleManagerChange(e.target.value)}>
                       <option value="All">All Managers</option>
-                      {mgrSet.map((m) => <option key={m} value={m}>{m}</option>)}
+                      {mgrOptions.map((m) => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
                     </select>
                   </div>
                 )}
