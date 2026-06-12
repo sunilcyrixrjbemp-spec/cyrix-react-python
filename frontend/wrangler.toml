@@ -10,3 +10,12 @@ database_id = "9dd13367-e6a6-43de-a1c1-613d40c33ced"
 [[r2_buckets]]
 binding = "BILLS_BUCKET"
 bucket_name = "cyrixapp"
+
+name = "cyrix-modern-app"
+type = "javascript"
+
+[build]
+command = "npm run build"
+
+[build.upload]
+format = "service-worker"
