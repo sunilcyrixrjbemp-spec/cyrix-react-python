@@ -123,7 +123,7 @@ export default function Layout() {
     if (!item) return;
 
     const isRoleAllowed = item.roles.includes(userRole);
-    const isMenuAllowed = allowedMenus.includes(item.id.toLowerCase());
+    const isMenuAllowed = userRole === 'Admin' || userRole === 'Superadmin' || allowedMenus.includes(item.id.toLowerCase());
 
     if (!isRoleAllowed || !isMenuAllowed) {
       navigate('/home');
@@ -144,6 +144,7 @@ export default function Layout() {
 
   const activeItems = ALL_MENU_ITEMS.filter(item => {
     if (!item.roles.includes(userRole)) return false;
+    if (userRole === 'Admin' || userRole === 'Superadmin') return true;
     if (item.id === 'dashboard' || item.id === 'expense') return true;
     return allowedMenus.includes(item.id.toLowerCase());
   });

@@ -1,88 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Poppins', sans-serif;
-}
-
-body {
-    background-color: #f0f4f8;
-    color: #334155;
-    display: flex;
-    min-height: 100vh;
-}
-
-/* ===== Sidebar Styling (White Theme) ===== */
-.sidebar {
-    width: 260px;
-    background-color: #ffffff;
-    border-right: 1px solid #e2e8f0;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 20px 0;
-    position: fixed;
-    height: 100vh;
-    overflow-y: auto;
-    z-index: 1000;
-}
-
-.brand-logo {
-    padding: 0 25px 20px 25px;
-    border-bottom: 1px solid #f1f5f9;
-    margin-bottom: 15px;
-    text-align: center;
-}
-
-.brand-logo img {
-    max-height: 50px;
-}
-
-.nav-menu {
-    list-style: none;
-    padding: 0 15px;
-}
-
-.nav-item {
-    margin-bottom: 5px;
-}
-
-.nav-link {
-    display: flex;
-    align-items: center;
-    padding: 12px 15px;
-    color: #64748b;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.nav-link:hover {
-    background-color: #f8fafc;
-    color: #3b82f6;
-}
-
-.nav-item.active .nav-link {
-    background-color: #eff6ff;
-    color: #3b82f6;
-    font-weight: 600;
-}
-
-.sidebar-bottom {
-    border-top: 1px solid #f1f5f9;
-    padding-top: 15px;
-}
-
-/* ===== Main Content Area ===== */
-.main-content {
-    flex: 1;
-    margin-left: 260px;
-    padding: 30px 40px;
-}
+/* Admin-specific CSS Stylesheet */
 
 .top-header {
     display: flex;
@@ -341,15 +257,7 @@ td {
 }
 
 /* ===== Responsive Mobile View ===== */
-@media (max-width: 1024px) {
-    .sidebar { width: 80px; }
-    .nav-link span, .sidebar-bottom, .brand-logo { display: none; }
-    .main-content { margin-left: 80px; width: calc(100% - 80px); }
-}
-
 @media (max-width: 768px) {
-    .main-content { margin-left: 0; padding: 20px; }
-    .sidebar { display: none; }
     .form-grid { grid-template-columns: 1fr; }
     .top-header { flex-direction: column; align-items: flex-start; gap: 15px; }
 }

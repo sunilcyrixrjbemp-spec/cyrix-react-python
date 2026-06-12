@@ -152,6 +152,7 @@ export default function Home() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [allowedMenus, setAllowedMenus] = useState<string[]>([]);
   
   const [selectedMonth, setSelectedMonth] = useState('');
   const [myExpenses, setMyExpenses] = useState<ExpenseItem[]>([]);
@@ -185,6 +186,7 @@ export default function Home() {
     const role = localStorage.getItem('user_role') || '';
     const name = localStorage.getItem('display_name') || '';
     const uId = localStorage.getItem('logged_in_user_id') || localStorage.getItem('user_id') || '';
+    const menus = localStorage.getItem('allowed_menus') || 'dashboard,expense,profile';
 
     if (!role || !uId) {
       navigate('/');
@@ -194,6 +196,7 @@ export default function Home() {
     setUserId(uId.replace(/['"]/g, '').trim());
     setUserRole(role);
     setDisplayName(name);
+    setAllowedMenus(menus.split(',').map(m => m.trim().toLowerCase()));
 
     const today = new Date();
     const defaultMonth = today.toISOString().slice(0, 7);
@@ -434,7 +437,12 @@ export default function Home() {
   };
 
   const showTeamSection = ['Manager', 'Admin', 'Superadmin', 'Coordinator', 'Divisional Manager'].includes(userRole);
-  const activeMenuItems = ALL_MENU_ITEMS.filter(m => m.roles.includes(userRole) && m.id !== 'dashboard');
+  const activeMenuItems = ALL_MENU_ITEMS.filter(m => {
+    if (!m.roles.includes(userRole)) return false;
+    if (m.id === 'dashboard') return false;
+    if (userRole === 'Admin' || userRole === 'Superadmin') return true;
+    return allowedMenus.includes(m.id.toLowerCase());
+  });
 
   return (
     <div style={{ width: '100%' }}>
