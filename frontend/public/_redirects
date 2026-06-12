@@ -1,0 +1,7 @@
+# Route API requests to the Python Flask backend
+# Replace localhost:8000 with your production Python backend server URL (e.g., https://your-api.onrender.com)
+/api/*  http://localhost:8000/api/:splat  200
+/uploads/*  http://localhost:8000/uploads/:splat  200
+
+# Fallback for Single Page Application routing (reloads)
+/*  /index.html  200

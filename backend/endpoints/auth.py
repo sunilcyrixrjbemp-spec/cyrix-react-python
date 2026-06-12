@@ -7,7 +7,9 @@ from db import get_db_connection
 
 auth_bp = Blueprint('auth', __name__)
 
-RESEND_API_KEY = "re_i7WRWahS_GbcGT7C65PH4fkAvez4DyYiS"
+import os
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "re_i7WRWahS_GbcGT7C65PH4fkAvez4DyYiS")
 FROM_EMAIL = "Cyrix Healthcare <noreply@sunilbishnoi.co.in>"
 
 def send_email(to_email: str, subject: str, html_content: str):
@@ -41,7 +43,7 @@ def login():
     cursor = conn.cursor()
     try:
         user = cursor.execute(
-            "SELECT user_id, password, full_name, account_status, failed_attempts, role FROM user WHERE user_id = ?",
+            "SELECT user_id, password, password_salt, full_name, account_status, failed_attempts, role FROM user WHERE user_id = ?",
             (user_id,)
         ).fetchone()
 
@@ -62,8 +64,18 @@ def login():
                 "message": "Your account is inactive. Please contact admin for activation."
             }), 403
 
-        # Exact plain text comparison as in original login.js
-        if password != user["password"]:
+        # Verify password (supports legacy plain-text and secure pbkdf2 hashed)
+        from endpoints.admin import hash_password
+        password_ok = False
+        if user["password_salt"]:
+            expected_hash = hash_password(password, user["password_salt"])
+            if expected_hash == user["password"]:
+                password_ok = True
+        else:
+            if password == user["password"]:
+                password_ok = True
+
+        if not password_ok:
             try:
                 current_attempts = int(user["failed_attempts"] or 0)
             except ValueError:
