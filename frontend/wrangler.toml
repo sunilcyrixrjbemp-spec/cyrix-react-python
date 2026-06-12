@@ -1,8 +1,12 @@
+name = "cyrix-modern-app"
+pages_build_output_dir = "dist"
+
+
 [[d1_databases]]
 binding = "DB"
-database_name = "cyrixapp_modern"
-database_id = "a09095fa-6105-4fa5-84f8-9b05c6d8cca7"
+database_name = "cyrixapp"
+database_id = "9dd13367-e6a6-43de-a1c1-613d40c33ced"
 
 [[r2_buckets]]
 binding = "BILLS_BUCKET"
-bucket_name = "cyrixapp-modern"
+bucket_name = "cyrixapp"
